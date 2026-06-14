@@ -1,0 +1,15 @@
+[project]
+name = "terracomrad"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.136.1",
+    "uvicorn>=0.46.0",
+    "python-multipart>=0.0.9",
+    "pydicom>=2.4.0",
+    "numpy>=1.24.0",
+    "Pillow>=10.0.0",
+    "scipy>=1.10.0",
+    "pydantic>=2.0.0",
+    "scipy-stubs~=1.15.3",
+]

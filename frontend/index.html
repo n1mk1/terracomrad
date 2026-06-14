@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TerraComrad</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1 class="logo">TerraComrad</h1>
+            <span class="tagline">DICOM Viewer</span>
+        </header>
+
+        <main id="main">
+
+            <!-- ── Upload + demos ──────────────────────────── -->
+            <section class="upload-area" id="uploadArea">
+
+                <div class="upload-layout">
+
+                    <div class="upload-main">
+
+                <div class="upload-panel">
+
+                    <div class="panel-header">
+                        <span class="panel-title">Open DICOM</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="maskToggle">
+                            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                            <span class="toggle-label">Mask overlay</span>
+                        </label>
+                    </div>
+
+                    <div class="upload-boxes" id="uploadBoxes">
+                        <div class="upload-box" id="baseBox">
+                            <div class="upload-box-icon">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+                                     stroke="currentColor" stroke-width="1.5"
+                                     stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                            </div>
+                            <p class="upload-box-title">DICOM Image</p>
+                            <p class="upload-box-sub">Click or drag &amp; drop</p>
+                            <p class="upload-box-fname" id="baseFname"></p>
+                        </div>
+
+                        <div class="upload-box disabled" id="maskBox">
+                            <div class="upload-box-icon">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+                                     stroke="currentColor" stroke-width="1.5"
+                                     stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                            </div>
+                            <p class="upload-box-title">Mask DICOM</p>
+                            <p class="upload-box-sub">Click or drag &amp; drop</p>
+                            <p class="upload-box-fname" id="maskFname"></p>
+                        </div>
+                    </div>
+
+                    <button class="proceed-btn" id="proceedBtn" disabled>Proceed →</button>
+                </div>
+
+                <input type="file" id="fileInput"     hidden accept=".dcm">
+                <input type="file" id="maskFileInput" hidden accept=".dcm">
+
+                <!-- Bundled test cases -->
+                <div class="demo-section">
+                    <p class="demo-heading">— bundled test cases —</p>
+                    <div class="demo-grid">
+
+                        <button class="demo-card" data-demo="case1">
+                            <span class="demo-mod">MG</span>
+                            <span class="demo-name">P_00778 · R MLO</span>
+                            <span class="demo-desc">Right Medio-Lateral Oblique</span>
+                            <span class="demo-badge">image + mask</span>
+                        </button>
+
+                        <button class="demo-card" data-demo="case2">
+                            <span class="demo-mod">MG</span>
+                            <span class="demo-name">P_00853 · R CC</span>
+                            <span class="demo-desc">Right Cranio-Caudal</span>
+                            <span class="demo-badge">image + mask</span>
+                        </button>
+
+                        <button class="demo-card" data-demo="case3">
+                            <span class="demo-mod">MG</span>
+                            <span class="demo-name">P_00900 · L MLO</span>
+                            <span class="demo-desc">Left Medio-Lateral Oblique</span>
+                            <span class="demo-badge">image + mask</span>
+                        </button>
+
+                    </div>
+                </div>
+
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- ── Viewer ──────────────────────────────────── -->
+            <section class="workspace hidden" id="workspace">
+
+                <!-- Toolbar -->
+                <div class="toolbar">
+                    <div class="tb-left">
+                        <span class="file-label" id="fileLabel">—</span>
+                        <button class="btn btn-ghost btn-sm" id="openNewBtn">Open file</button>
+                        <span class="save-status" id="saveStatus"></span>
+                    </div>
+
+                    <div class="tb-center">
+                        <!-- Interaction mode -->
+                        <div class="tool-group">
+                            <button class="tool-btn active" id="btnPan" title="Pan / select annotation">Pan</button>
+                            <button class="tool-btn"        id="btnWL"  title="Drag to adjust W/L">W/L</button>
+                        </div>
+
+                        <!-- Annotation (ROI) tools -->
+                        <div class="tool-group annot-group">
+                            <span class="target-label">Annotate</span>
+                            <select class="annot-type-select" id="annotType" title="Finding type applied to new annotations">
+                                <option value="Mass">Mass</option>
+                                <option value="Calcification">Calcification</option>
+                                <option value="Asymmetry">Asymmetry</option>
+                                <option value="Arch. distortion">Arch. distortion</option>
+                                <option value="Other">Other</option>
+                            </select>
+                            <button class="tool-btn" id="btnAnnotRect"    title="Rectangle ROI — box a finding">▭ Box</button>
+                            <button class="tool-btn" id="btnAnnotEllipse" title="Ellipse ROI — circle a mass">◯ Ellipse</button>
+                            <button class="tool-btn" id="btnAnnotFree"    title="Freehand ROI — trace a margin">✎ Trace</button>
+                            <button class="tool-btn" id="btnAnnotUndo"    title="Undo last annotation" disabled>⟲</button>
+                            <button class="tool-btn" id="btnAnnotClear"   title="Remove all annotations" disabled>Clear</button>
+                        </div>
+
+                        <!-- Active target (shown only in dual mode) -->
+                        <div class="tool-group hidden" id="targetGroup">
+                            <span class="target-label">Editing</span>
+                            <button class="tool-btn active" id="btnTargetBase" title="Adjust base image">Base</button>
+                            <button class="tool-btn"        id="btnTargetMask" title="Adjust mask image">Mask</button>
+                        </div>
+
+                        <!-- Transforms -->
+                        <div class="tool-group">
+                            <button class="tool-btn" id="btnInvert" title="Invert active image">Invert</button>
+                            <button class="tool-btn" id="btnRotCCW" title="Rotate 90° CCW">↺</button>
+                            <button class="tool-btn" id="btnRotCW"  title="Rotate 90° CW">↻</button>
+                            <button class="tool-btn" id="btnFlipH"  title="Flip H">⇆ H</button>
+                            <button class="tool-btn" id="btnFlipV"  title="Flip V">⇅ V</button>
+                        </div>
+
+                        <!-- View -->
+                        <div class="tool-group">
+                            <button class="tool-btn" id="btnFit"   title="Fit to window">Fit</button>
+                            <button class="tool-btn" id="btnReset" title="Reset all">Reset</button>
+                        </div>
+                    </div>
+
+                    <div class="tb-right">
+                        <button class="btn btn-sm btn-accent" id="btnStartAnalysis" disabled>Start Analysis</button>
+                    </div>
+                </div>
+
+                <!-- Canvas -->
+                <div class="canvas-container" id="canvasContainer">
+                    <img id="dicomImg" class="dicom-img"          draggable="false" alt="">
+                    <img id="maskImg"  class="dicom-img mask-img" draggable="false" alt="">
+
+                    <!-- Doctor annotation layer (ROI shapes, pinned to base-image pixels) -->
+                    <svg id="annotLayer" class="annot-layer hidden" xmlns="http://www.w3.org/2000/svg"></svg>
+
+                    <!-- Target ring — visual indicator of which image is active -->
+                    <div class="target-ring hidden" id="targetRing"></div>
+
+                    <div class="overlay ov-tl" id="ovTL"></div>
+                    <div class="overlay ov-tr" id="ovTR"></div>
+                    <div class="overlay ov-bl" id="ovBL"></div>
+                    <div class="overlay ov-br" id="ovBR"></div>
+
+                    <div class="spinner-wrap hidden" id="spinnerWrap"><div class="spinner"></div></div>
+                    <div class="img-error  hidden" id="imgError"></div>
+                </div>
+
+                <!-- WW/WL + mask controls -->
+                <div class="controls-bar">
+                    <label class="slider-label">
+                        <span class="slider-name">WW</span>
+                        <input type="range" id="wwSlider" min="1" max="4096" value="400">
+                        <span class="slider-val" id="wwVal">400</span>
+                    </label>
+                    <label class="slider-label">
+                        <span class="slider-name">WL</span>
+                        <input type="range" id="wlSlider" min="-1024" max="3071" value="40">
+                        <span class="slider-val" id="wlVal">40</span>
+                    </label>
+                    <button class="btn btn-ghost btn-sm" id="btnAutoWwwl">Auto</button>
+
+                    <!-- Mask overlay controls -->
+                    <div class="mask-controls hidden" id="maskControls">
+                        <span class="ctrl-sep"></span>
+                        <label class="slider-label">
+                            <span class="slider-name">Opacity</span>
+                            <input type="range" id="maskOpacity" min="0" max="100" value="50">
+                            <span class="slider-val" id="maskOpVal">50%</span>
+                        </label>
+                        <select class="color-select" id="maskColor">
+                            <option value="green">Green</option>
+                            <option value="red">Red</option>
+                            <option value="blue">Blue</option>
+                            <option value="yellow">Yellow</option>
+                            <option value="cyan">Cyan</option>
+                        </select>
+                        <button class="tool-btn" id="btnToggleMask">Hide mask</button>
+                    </div>
+                </div>
+
+                <!-- Doctor annotations list -->
+                <div class="annot-bar hidden" id="annotBar">
+                    <div class="annot-bar-left">
+                        <span class="annot-bar-title">ROI Annotations</span>
+                        <span class="annot-bar-hint" id="annotHint">Choose a tool, then drag on the image.</span>
+                    </div>
+                    <div class="annot-chips" id="annotChips"></div>
+                </div>
+
+                <!-- Metadata -->
+                <div class="meta-bar">
+                    <button class="meta-toggle" id="metaToggle">
+                        Metadata <span id="metaArrow">▾</span>
+                    </button>
+                    <div class="meta-grid hidden" id="metaGrid"></div>
+                </div>
+
+            </section>
+            <!-- ── Analysis screen (2D overlay + AOI profile) ─── -->
+            <section class="analysis-screen hidden" id="analysisScreen">
+
+                <div class="analysis-toolbar">
+                    <button class="btn btn-ghost btn-sm" id="btnBackToViewer">← Back to viewer</button>
+                    <span class="analysis-screen-title" id="analysisScanLabel"></span>
+                    <button class="btn btn-ghost btn-sm" id="btnReanalyze">Re-analyze</button>
+                </div>
+
+                <div class="analysis-loading hidden" id="analysisLoading">
+                    <div class="spinner"></div>
+                    <span>Computing AOI profile…</span>
+                </div>
+
+                <div class="analysis-error hidden" id="analysisError"></div>
+
+                <div class="analysis-grid" id="analysisGrid">
+
+                    <aside class="map-legend" id="mapLegend">
+                        <div class="legend-header">Map Legend</div>
+                        <div class="legend-items" id="legendItems"></div>
+                    </aside>
+
+                    <div class="scan-panel">
+                        <div class="scan-stage" id="scanStage">
+                            <canvas id="scanCanvas" width="512" height="512"></canvas>
+                            <canvas id="overlayCanvas" width="512" height="512"></canvas>
+                        </div>
+                        <div class="overlay-toggles">
+                            <label class="overlay-toggle"><input type="checkbox" id="togMask" checked> Generated mass mask</label>
+                            <label class="overlay-toggle"><input type="checkbox" id="togBboxes" checked> Bounding boxes</label>
+                            <label class="overlay-toggle"><input type="checkbox" id="togHalo" checked> Crown Shyness halo</label>
+                            <label class="overlay-toggle"><input type="checkbox" id="togRelevance"> Mass-likelihood heatmap</label>
+                            <label class="overlay-toggle"><input type="checkbox" id="togAnnotations" checked> Doctor annotations</label>
+                        </div>
+                    </div>
+
+                    <aside class="lesion-cards-panel">
+                        <div class="lesion-cards-header">AOI Panel</div>
+                        <div class="lesion-cards" id="lesionCards"></div>
+                    </aside>
+
+                </div>
+
+                <div class="results-table-wrap">
+                    <table class="results-table">
+                        <thead>
+                            <tr>
+                                <th>Label of Image</th>
+                                <th>Is there an AOI?</th>
+                                <th>How many AOIs?</th>
+                                <th>AOI Shape?</th>
+                                <th>AOI Margins?</th>
+                                <th>Pathology / Risk?</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr id="resultsRow">
+                                <td colspan="6" class="results-empty">Run an analysis to populate the AOI profile.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </section>
+
+        </main>
+    </div>
+    <script src="/static/app.js"></script>
+</body>
+</html>

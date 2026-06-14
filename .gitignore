@@ -1,0 +1,16 @@
+.venv/
+.uv-cache/
+__pycache__/
+*.py[cod]
+.idea/
+.env
+
+# Runtime data. Demo DICOMs live in backend/demos and are intentionally kept.
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/aoi_logs/*
+!backend/aoi_logs/.gitkeep
+
+# Claude Code local settings + AI working notes (machine-specific, not project code)
+.claude/settings.local.json
+/memory/
