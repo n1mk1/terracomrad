@@ -9,8 +9,6 @@ const state = {
     maskVisible: true,
 
     target: 'base',  // 'base' | 'mask'
-
-    demoId: null,
 };
 
 // Independent transform state per image
@@ -84,8 +82,6 @@ const analysisScreen    = document.getElementById('analysisScreen');
 const analysisLoading   = document.getElementById('analysisLoading');
 const analysisError     = document.getElementById('analysisError');
 const analysisScanLabel = document.getElementById('analysisScanLabel');
-const analysisGrid      = document.getElementById('analysisGrid');
-const legendItems       = document.getElementById('legendItems');
 const lesionCards       = document.getElementById('lesionCards');
 const resultsRow        = document.getElementById('resultsRow');
 const scanCanvas        = document.getElementById('scanCanvas');
@@ -93,7 +89,6 @@ const overlayCanvas     = document.getElementById('overlayCanvas');
 const togMask           = document.getElementById('togMask');
 const togBboxes         = document.getElementById('togBboxes');
 const togHalo           = document.getElementById('togHalo');
-const togRelevance      = document.getElementById('togRelevance');
 const togAnnotations    = document.getElementById('togAnnotations');
 const btnBackToViewer   = document.getElementById('btnBackToViewer');
 const btnReanalyze      = document.getElementById('btnReanalyze');
@@ -243,8 +238,6 @@ openNewBtn.addEventListener('click', () => {
 let analysisRunning = false;
 let analysisAbortController = null;
 let currentAnalysis = null;
-let scanImageEl = null;
-let relevanceImageEl = null;
 let maskImageEl = null;
 let selectedLesionId = null;
 
@@ -259,7 +252,7 @@ btnStartAnalysis.addEventListener('click', () => runAnalysis());
 btnReanalyze.addEventListener('click',     () => runAnalysis());
 btnBackToViewer.addEventListener('click',  showViewer);
 
-[togMask, togBboxes, togHalo, togRelevance, togAnnotations].forEach(el =>
+[togMask, togBboxes, togHalo, togAnnotations].forEach(el =>
     el.addEventListener('change', drawOverlays)
 );
 
@@ -286,7 +279,6 @@ async function runAnalysis() {
 
     analysisError.classList.add('hidden');
     analysisError.textContent = '';
-    legendItems.innerHTML = '';
     lesionCards.innerHTML = '';
     resultsRow.innerHTML = '<td colspan="6" class="results-empty">Computing…</td>';
     clearOverlays();
@@ -295,8 +287,6 @@ async function runAnalysis() {
 
     try {
         const params = new URLSearchParams({ ww: state.ww, wl: state.wl });
-        if (state.maskFileId) params.set('mask_file_id', state.maskFileId);
-        if (state.demoId)     params.set('demo_id', state.demoId);
         // Forward the doctor's ROI annotations so the backend can focus
         // detection where the clinician marked the finding (in base-image px).
         const roiBody = {
@@ -344,70 +334,29 @@ async function runAnalysis() {
 function renderAnalysis(data) {
     analysisLoading.classList.add('hidden');
     currentAnalysis = data;
-    const aois = (data.lesion_profile && (data.lesion_profile.aois || data.lesion_profile.lesions)) || [];
-    selectedLesionId = aois[0] ? (aois[0].aoi_id || aois[0].lesion_id) : null;
-    renderLegend(data);
+    const aois = (data.lesion_profile && data.lesion_profile.aois) || [];
+    selectedLesionId = aois[0] ? aois[0].aoi_id : null;
     renderResultsTable(data);
     renderLesionCards(data);
     preloadOverlayImages(data);
     drawScan();
 }
 
-function renderLegend(data) {
-    const items = [
-        ['intensity', 'Intensity'],
-        ['roughness', 'Roughness'],
-        ['edges', 'Edges'],
-        ['density', 'Density'],
-    ];
-    const maps = data.maps || {};
-    let html = items
-        .filter(([k]) => maps[k])
-        .map(([k, label]) => `
-            <div class="legend-item">
-                <img src="data:image/png;base64,${maps[k]}" alt="${label}">
-                <span>${label}</span>
-            </div>
-        `).join('');
-    if (data.relevance && data.relevance.png) {
-        const thr = Number(data.relevance.threshold || 0).toFixed(2);
-        const method = data.relevance.threshold_method || 'otsu';
-        html += `
-            <div class="legend-item">
-                <img src="data:image/png;base64,${data.relevance.png}" alt="Mass likelihood">
-                <span>Mass likelihood · ${method} thr ${thr}</span>
-            </div>
-        `;
-    }
-    if (data.generated_mask && data.generated_mask.png) {
-        const pct = Number(data.generated_mask.area_pct || 0).toFixed(2);
-        html += `
-            <div class="legend-item">
-                <img src="data:image/png;base64,${data.generated_mask.png}" alt="Generated mass mask">
-                <span>Generated mass mask · ${pct}% area</span>
-            </div>
-        `;
-    }
-    legendItems.innerHTML = html || '<div class="legend-empty">No maps returned.</div>';
-}
-
 function renderResultsTable(data) {
     const lp = data.lesion_profile || {};
-    const pathologyLabel = lp.pathology_source === 'ground_truth'
-        ? `Pathology: ${escapeHtml(lp.pathology || 'N/A')}`
-        : `Risk: ${escapeHtml(lp.pathology || 'N/A')}`;
+    const pathologyLabel = `Risk: ${escapeHtml(lp.pathology || 'N/A')}`;
     resultsRow.innerHTML = `
         <td>${escapeHtml(lp.image_label || state.fileId || '—')}</td>
-        <td>${escapeHtml(lp.is_there_an_aoi || lp.is_there_a_lesion || '—')}</td>
-        <td>${lp.aoi_count ?? lp.lesion_count ?? '—'}</td>
-        <td>${escapeHtml(lp.aoi_shape || lp.lesion_shape || 'N/A')}</td>
-        <td>${escapeHtml(lp.aoi_margin || lp.lesion_margin || 'N/A')}</td>
+        <td>${escapeHtml(lp.is_there_an_aoi || '—')}</td>
+        <td>${lp.aoi_count ?? '—'}</td>
+        <td>${escapeHtml(lp.aoi_shape || 'N/A')}</td>
+        <td>${escapeHtml(lp.aoi_margin || 'N/A')}</td>
         <td class="${pathologyClass(lp.pathology)}">${pathologyLabel}${lp.confidence != null ? ` (${(lp.confidence * 100).toFixed(0)}%)` : ''}</td>
     `;
 }
 
 function renderLesionCards(data) {
-    const lesions = (data.lesion_profile && (data.lesion_profile.aois || data.lesion_profile.lesions)) || [];
+    const lesions = (data.lesion_profile && data.lesion_profile.aois) || [];
 
     // ── Doctor's annotations (drawn in the viewer; browser-side only) ──
     const annHtml = annotations.length
@@ -429,12 +378,8 @@ function renderLesionCards(data) {
         const largest = lesions.reduce((best, l) =>
             ((l.geometry && l.geometry.area_px) || 0) > ((best.geometry && best.geometry.area_px) || 0) ? l : best,
             lesions[0]);
-        selectedLesionId = largest.aoi_id || largest.lesion_id;
-        const compare = data.mask_comparison;
-        const compareHtml = compare
-            ? `<div class="mask-compare">Reference mask · Dice ${compare.dice_score?.toFixed?.(3) ?? '—'} · IoU ${compare.iou_score?.toFixed?.(3) ?? '—'}</div>`
-            : '';
-        sysHtml = compareHtml + systemAoiCard(largest, lesions.length);
+        selectedLesionId = largest.aoi_id;
+        sysHtml = systemAoiCard(largest, lesions.length);
     }
 
     lesionCards.innerHTML = `
@@ -454,11 +399,11 @@ function renderLesionCards(data) {
 function systemAoiCard(lesion, totalCount) {
     const css = lesion.crown_shyness || {};
     const geom = lesion.geometry || {};
-    const aoiId = lesion.aoi_id || lesion.lesion_id;
+    const aoiId = lesion.aoi_id;
     const interp = css.interpretation || 'ambiguous';
     const color = CSS_COLORS[interp] || NEUTRAL_COLOR;
     const conf = lesion.confidence != null ? `${(lesion.confidence * 100).toFixed(0)}%` : '—';
-    const pillPrefix = lesion.pathology_source === 'ground_truth' ? 'Pathology' : 'Risk';
+    const pillPrefix = 'Risk';
     const evidence = (lesion.margin_evidence || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
     const countNote = totalCount > 1
         ? `<div class="aoi-subnote">Largest of ${totalCount} detected AOIs.</div>`
@@ -490,7 +435,6 @@ function systemAoiCard(lesion, totalCount) {
                 <dt>Halo σ</dt><dd>${formatNum(css.halo_width_std)}</dd>
                 <dt>Entropy</dt><dd>${formatNum(css.transition_zone_entropy)}</dd>
                 <dt>Visibility</dt><dd>${formatNum(css.boundary_visibility_ratio)}</dd>
-                <dt>Dark ring</dt><dd>${css.radiolucent_halo_present ? 'yes' : 'no'}</dd>
             </dl>
             ${evidence ? `<div class="lesion-kv-sep">Margin evidence</div><ul class="lesion-evidence">${evidence}</ul>` : ''}
         </div>`;
@@ -518,13 +462,7 @@ function selectLesion(lesionId, scrollCard = true) {
 }
 
 function preloadOverlayImages(data) {
-    relevanceImageEl = null;
     maskImageEl = null;
-    if (data.relevance && data.relevance.png) {
-        const img = new Image();
-        img.onload = () => { relevanceImageEl = img; drawOverlays(); };
-        img.src = `data:image/png;base64,${data.relevance.png}`;
-    }
     if (data.generated_mask && data.generated_mask.png) {
         const img = new Image();
         img.onload = () => { maskImageEl = img; drawOverlays(); };
@@ -537,14 +475,12 @@ function drawScan() {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-        scanImageEl = img;
         const ctx = scanCanvas.getContext('2d');
         ctx.clearRect(0, 0, scanCanvas.width, scanCanvas.height);
         ctx.drawImage(img, 0, 0, scanCanvas.width, scanCanvas.height);
         drawOverlays();
     };
     img.onerror = () => {
-        scanImageEl = null;
         const ctx = scanCanvas.getContext('2d');
         ctx.fillStyle = '#101018';
         ctx.fillRect(0, 0, scanCanvas.width, scanCanvas.height);
@@ -555,9 +491,7 @@ function drawScan() {
 
 function clearOverlays() {
     currentAnalysis = null;
-    relevanceImageEl = null;
     maskImageEl = null;
-    scanImageEl = null;
     selectedLesionId = null;
     const sc = scanCanvas.getContext('2d');
     sc.clearRect(0, 0, scanCanvas.width, scanCanvas.height);
@@ -574,11 +508,6 @@ function drawOverlays() {
     const size = currentAnalysis.generated_mask?.size || 512;
     const sx = W / size, sy = H / size;
 
-    if (togRelevance.checked && relevanceImageEl) {
-        ctx.globalAlpha = 0.40;
-        ctx.drawImage(relevanceImageEl, 0, 0, W, H);
-        ctx.globalAlpha = 1.0;
-    }
     if (togMask.checked && maskImageEl) {
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = 0.35;
@@ -587,13 +516,13 @@ function drawOverlays() {
         ctx.globalCompositeOperation = 'source-over';
     }
 
-    const lesions = (currentAnalysis.lesion_profile && (currentAnalysis.lesion_profile.aois || currentAnalysis.lesion_profile.lesions)) || [];
+    const lesions = (currentAnalysis.lesion_profile && currentAnalysis.lesion_profile.aois) || [];
     // Focus the per-AOI overlay on the largest AOI — the one shown in the panel.
     const largest = lesions.length
         ? lesions.reduce((best, l) => ((l.geometry && l.geometry.area_px) || 0) > ((best.geometry && best.geometry.area_px) || 0) ? l : best, lesions[0])
         : null;
     [largest].filter(Boolean).forEach(lesion => {
-        const aoiId = lesion.aoi_id || lesion.lesion_id;
+        const aoiId = lesion.aoi_id;
         const interp = lesion.crown_shyness?.interpretation || 'ambiguous';
         const color = CSS_COLORS[interp] || NEUTRAL_COLOR;
         const isSelected = aoiId === selectedLesionId;
@@ -643,7 +572,6 @@ function resetAnalysisUi() {
     analysisLoading.classList.add('hidden');
     analysisError.classList.add('hidden');
     analysisError.textContent = '';
-    legendItems.innerHTML = '';
     lesionCards.innerHTML = '';
     resultsRow.innerHTML = '<td colspan="6" class="results-empty">Run an analysis to populate the AOI profile.</td>';
     clearOverlays();
@@ -678,7 +606,6 @@ function applyFileData(data) {
     state.meta      = data.metadata || {};
     state.ww        = data.ww;        state.defaultWw = data.ww;
     state.wl        = data.wl;        state.defaultWl = data.wl;
-    state.demoId    = data.demo_id || null;
 
     if (data.mask_file_id) {
         enableMask(data.mask_file_id, data.mask_ww, data.mask_wl, data.mask_ww, data.mask_wl);

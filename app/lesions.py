@@ -305,7 +305,7 @@ def extract_lesions(mask: np.ndarray) -> list[dict]:
     return components
 
 
-def compute_geometry(lesion: dict, img: np.ndarray, mm2_per_px: float | None = None,
+def compute_geometry(lesion: dict, img: np.ndarray,
                      gradient: np.ndarray | None = None) -> dict:
     """Per-AOI geometry feature dict used by the shape/margin classifiers."""
     area_px = lesion["area_px"]
@@ -317,9 +317,6 @@ def compute_geometry(lesion: dict, img: np.ndarray, mm2_per_px: float | None = N
     perimeter = _perimeter(contour)
     circularity = float(4 * np.pi * area_px / (perimeter ** 2)) if perimeter > 0 else 0.0
     circularity = min(circularity, 1.0)
-
-    bbox_area = max(1, (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]))
-    extent = float(area_px / bbox_area)
 
     ys, xs = np.where(component)
     hull_area = _convex_hull_area(np.column_stack([xs, ys])) if xs.size >= 3 else float(area_px)
@@ -350,17 +347,9 @@ def compute_geometry(lesion: dict, img: np.ndarray, mm2_per_px: float | None = N
         "circularity": round(circularity, 4),
         "eccentricity": round(eccentricity, 4),
         "solidity": round(min(max(solidity, 0.0), 1.0), 4),
-        "extent": round(min(max(extent, 0.0), 1.0), 4),
         "contour_roughness": round(contour_roughness, 4),
         "lobulation_index": round(lobulation, 4),
         "radial_spike_index": round(spike, 4),
         "spiculation_convergence": round(convergence, 4),
     }
-    if mm2_per_px and mm2_per_px > 0:
-        area_mm2 = area_px * mm2_per_px
-        geom["area_mm2"] = round(area_mm2, 2)
-        geom["equiv_diameter_mm"] = round(2.0 * float(np.sqrt(area_mm2 / np.pi)), 2)
-    else:
-        geom["area_mm2"] = None
-        geom["equiv_diameter_mm"] = None
     return geom

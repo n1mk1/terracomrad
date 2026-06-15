@@ -739,7 +739,7 @@ body {
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: 200px minmax(0, 1fr) 320px;
+    grid-template-columns: minmax(0, 1fr) 320px;
     gap: 1px;
     background: var(--border);
     overflow: hidden;
@@ -1090,7 +1090,7 @@ body {
 
 @media (max-width: 1080px) {
     .analysis-grid {
-        grid-template-columns: 168px minmax(0, 1fr) 280px;
+        grid-template-columns: minmax(0, 1fr) 280px;
     }
 }
 
@@ -1104,7 +1104,6 @@ body {
         grid-template-columns: 1fr;
         grid-auto-rows: auto;
     }
-    .map-legend,
     .lesion-cards-panel {
         max-height: 220px;
     }

@@ -31,13 +31,11 @@ removed in full.)
 5. **Doctor ROI annotation** in the viewer — three region tools (Box, Ellipse, Trace).
 6. A deterministic backend analysis pipeline (input: a hyper-zoomed mass crop)
    that produces:
-   - four spatial maps (intensity, roughness, edges, density),
-   - a **mass-likelihood** map,
-   - an Otsu-thresholded, centre-selected **generated mass mask**,
+   - an internal **mass-likelihood** map and an Otsu-thresholded, centre-selected
+     **generated mass mask**,
    - connected-component AOI candidates with geometry features,
    - **Crown Shyness** boundary metrics per AOI,
    - rule-based shape, margin, and pathology/risk labels,
-   - optional Dice/IoU comparison against an uploaded reference mask,
    - a saved JSON log per analysis.
 7. An **AOI Panel** that shows the doctor's annotations alongside the
    system-collected measurements for the **largest AOI only**.
@@ -72,15 +70,14 @@ app/                    FastAPI backend (analysis owns the server side)
   paths.py              Absolute project paths
   routes.py             API endpoints + AOI JSON log writer
   dicom_io.py           Metadata, default WW/WL, PNG rendering for the viewer
-  storage.py            Upload dir, demo registry, ground-truth sidecar, filename safety
+  storage.py            Upload dir, demo registry, filename safety
   preprocess.py         DICOM → normalized 512×512 float32 analysis image
-  maps.py               Intensity / roughness / edges / density maps + PNG previews
+  maps.py               Breast mask + gradient map for the geometry/boundary stages
   relevance.py          Mass-likelihood map + Otsu/centre mass-mask segmentation
   lesions.py            Connected-component AOI extraction + geometry features
   crown_shyness.py      Per-AOI boundary metrics ("Crown Shyness")
   classify.py           Rule-based shape / margin / pathology classifiers
   pipeline.py           Orchestrates the analysis and builds the response payload
-  lesion_schema.py      Pydantic enums/models documenting the label contract
 
 frontend/
   index.html            Single-page UI (upload, viewer, analysis screen)
@@ -93,8 +90,7 @@ backend/
   aoi_logs/             One JSON log written per analysis run (gitignored)
 ```
 
-Root `main.py` is a compatibility shim for older `uvicorn main:app` commands;
-deployment uses `app.main:app`.
+Deployment uses `app.main:app` (the same command the `Procfile` runs).
 
 ---
 
@@ -108,8 +104,7 @@ Then open `http://127.0.0.1:8000`. No environment configuration or API key is
 required — everything runs locally.
 
 **Dependencies** (`pyproject.toml`): `fastapi`, `uvicorn`, `python-multipart`,
-`pydicom`, `numpy`, `Pillow`, `scipy`, `pydantic`, `scipy-stubs`. No LLM/provider
-SDKs are used.
+`pydicom`, `numpy`, `Pillow`, `scipy`. No LLM/provider SDKs are used.
 
 ---
 
@@ -121,10 +116,9 @@ SDKs are used.
 | GET  | `/static/*` | Frontend assets | css/js |
 | POST | `/api/upload` | Upload one DICOM (multipart `file`) | `{file_id, metadata, ww, wl}` |
 | GET  | `/api/demos` | List bundled demos | `[{id, label, description}]` |
-| GET  | `/api/demo/{name}` | Copy a demo (image+mask) into uploads | `{file_id, mask_file_id, metadata, ww, wl, mask_ww, mask_wl, label, demo_id}` |
+| GET  | `/api/demo/{name}` | Copy a demo (image+mask) into uploads | `{file_id, mask_file_id, metadata, ww, wl, mask_ww, mask_wl, label}` |
 | GET  | `/api/files/{file_id}/image?ww&wl` | Render a stored DICOM to PNG | `image/png` (no-store) |
-| POST | `/api/cleanup` | Delete uploads by id (`{file_ids:[...]}`) | `{}` |
-| POST | `/api/process/{file_id}?ww&wl&mask_file_id&demo_id` | Run the analysis pipeline (optional JSON body `{rois, image_width, image_height}` for ROI-guided detection) | analysis payload (§8) |
+| POST | `/api/process/{file_id}?ww&wl` | Run the analysis pipeline (optional JSON body `{rois, image_width, image_height}` for ROI-guided detection) | analysis payload (§8) |
 
 Uploaded files are written to `backend/uploads/` under a sanitized filename;
 `file_id` is that filename. Demo loading copies the demo image/mask into
@@ -155,22 +149,12 @@ Order: **preprocess → maps → relevance → threshold/clean → extract AOIs 
 geometry → crown_shyness → classify → aggregate**. Pure measurement, no generated
 text.
 
-### 7.1 Spatial maps & detection features (`maps.py`)
-Two families of 512×512 `[0,1]` maps:
-
-**Display maps** (legend previews, describe global appearance):
-- **intensity** — normalized image (viridis).
-- **roughness** — local standard deviation, 16-px window, via the
-  `Var = E[X²] − E[X]²` identity (plasma).
-- **edges** — Sobel gradient magnitude with an 80th-percentile floor (grayscale).
-- **density** — heavy box blur, radius 20 (inferno).
-
-**Auxiliary maps** (computed alongside, for the legend and the downstream
-boundary/geometry stages — they no longer drive segmentation):
-- **breast_mask** — Otsu split of tissue vs. air, largest component, holes filled.
-- **local_contrast** — Gaussian high-pass standardized by local texture.
-- **blob** — multiscale Difference-of-Gaussians (bright compact response).
-- **edge_density** — Gaussian-smoothed gradient magnitude.
+### 7.1 Breast mask & gradient (`maps.py`)
+`maps.py` produces two 512×512 arrays consumed by the downstream geometry /
+boundary stages. They do **not** drive segmentation and are not rendered for the
+UI:
+- **breast_mask** — Otsu split of tissue vs. air, largest component, holes filled;
+  bounds the in-breast gradient normalization for Crown Shyness (§7.6).
 - **gradient** — Gaussian-smoothed gradient magnitude, shared by the margin and
   Crown-Shyness boundary metrics (§7.5–7.6).
 
@@ -179,8 +163,7 @@ boundary/geometry stages — they no longer drive segmentation):
 > focal outlier to hunt inside a breast — it is the **dominant, roughly centred
 > object** that fills a large fraction (~30–60%) of the frame and is *locally
 > brighter* than the tissue around it. The segmenter (§7.2–7.3) is built for that
-> geometry and runs **directly on the preprocessed image**; the maps above are
-> retained for the legend and the boundary/geometry stages.
+> geometry and runs **directly on the preprocessed image**.
 
 ### 7.2 Mass-likelihood map (`relevance.py → compute_relevance`)
 A per-pixel **mass likelihood** in `[0,1]`, built directly from the crop from
@@ -202,7 +185,8 @@ likelihood = (0.5·local_brightness + 0.5·elevation) · centre_prior
   When the clinician drew an ROI, the prior is centred on the **ROI centroid**.
 
 The outer `BORDER_FRAC = 4%` of the frame is forced to zero (a padded crop never
-has the true mass running off the edge). Rendered with the magma palette.
+has the true mass running off the edge). The likelihood map is internal — it
+drives segmentation and is no longer returned as an image.
 
 ### 7.3 Threshold + mask cleanup (`relevance.py → threshold_and_clean`)
 The likelihood is split with **Otsu** and reduced to one clean blob:
@@ -218,8 +202,8 @@ The likelihood is split with **Otsu** and reduced to one clean blob:
 
 A result below `MIN_AREA_PX = 256` is reported as **no mass localized**. The
 output is the **generated mass mask** (binary 512×512), reported with its pixel
-area and percentage of the frame. Threshold method is `mass_otsu`, `roi_otsu`, or
-`roi_shape`.
+area and percentage of the frame. The threshold method (`mass_otsu`, `roi_otsu`,
+or `roi_shape`) is computed internally.
 
 > **Why this works deterministically.** Reliably localizing a subtle mass *inside
 > a whole breast* bottom-up is not solvable without learning (it is why
@@ -243,27 +227,23 @@ non-circular shape to ~0.01).
 
 Per AOI: `area_px`, `area_pct`, `bbox`, `centroid`, `circularity` (`4πA/P²`,
 capped at 1), `eccentricity` (fitted-ellipse), `solidity`
-(`area / convex-hull area`), `extent` (`area / bbox area`), `contour_roughness`,
+(`area / convex-hull area`), `contour_roughness`,
 `lobulation_index` (prominence-based count of broad rounded lobes on a resampled
 radial signature — disk → 0), `radial_spike_index` (narrow sharp outward
 protrusions — disk → 0), and `spiculation_convergence` (angular **entropy** of
 strong gradients in a ring around the mass: spread evenly → 0, radiating spicules
-→ 1; sees spicules the segmentation outline may have missed). When the DICOM
-carries `PixelSpacing`, `area_mm2` and `equiv_diameter_mm` are also reported
-(accounting for the 512² resize); otherwise they are `null`.
+→ 1; sees spicules the segmentation outline may have missed).
 
 ### 7.6 Crown Shyness boundary metrics (`crown_shyness.py → compute_css`)
 "Does the AOI respect the surrounding tissue boundary, or pull into it?" Computed
 over a transition band (`BAND_RADIUS = 6` px) around the contour:
 - `gradient_sharpness` — mean normalized gradient in the band.
-- `halo_width_mean` / `halo_width_std` — transition-band width sampled along 64
+- `halo_width_std` — variation of the transition-band width sampled along 64
   radial rays.
 - `transition_zone_entropy` — Shannon entropy (16 bins) of band intensities,
   normalized to `[0,1]`.
 - `boundary_visibility_ratio` — fraction of contour points whose gradient clears
   `VISIBILITY_FLOOR = 0.18`.
-- `radiolucent_halo_present` — true if ≥55% of the outer band is darker than
-  `0.20` (a dark ring).
 
 The gradient is normalized by a robust **in-breast 95th percentile**, not the
 global max — otherwise the single huge skin/air edge would compress every
@@ -286,30 +266,22 @@ Interpretation: `> 0.65` → **respects_boundary**, `0.40–0.65` → **ambiguou
   evidence list** of the conditions that fired.
 - **Pathology/risk** — weighted rule score from margin/shape/CSS/spikes; `≥ 0.50`
   → `malignant` else `benign`, with a confidence. This is a demo heuristic
-  (`pathology_source = "rule_based_demo"`), **overridden to `ground_truth`** when a
-  demo case ships a `case.json` sidecar with a known pathology.
+  (`pathology_source = "rule_based_demo"`).
 
 ### 7.8 Image-level aggregation
 The image-level shape/margin come from a **risk-ranked** top candidate
 (`_rank_lesion`: pathology → spiculated margin → irregular/AD shape → lower CSS).
-Image pathology is malignant if any AOI is malignant (or the ground-truth value).
+Image pathology is malignant if any AOI is malignant.
 
-### 7.9 Quality gates & mask comparison
+### 7.9 Quality gates
 - **Localization quality** (`analysis_quality`): the honest "how much to trust
   this" signal. The cropped mass should be a large central blob, so it gates on
-  the generated mask as a **fraction of the frame** (`frame_area_fraction`).
-  Statuses: `clinician_guided` (an ROI bounded the finding — trusted),
-  `acceptable_heuristic`, `low_confidence_small` (mask `< MIN_MASS_FRAC = 4%` →
-  the central object was missed / under-segmented), `low_reference_overlap`
-  (`Dice < 0.20` vs. a reference mask), `failed_broad_mask` (mask `> MAX_MASS_FRAC
-  = 85%` → the threshold flooded the crop), or `failed_no_mass` (nothing
-  localized). Also reports `roi_guided` and the gate thresholds.
-- **Mask comparison** — when a mask DICOM is supplied it is compared to the
-  generated mask via **Dice** and **IoU**. A **whole-mammogram reference mask**
-  (the lesion is a speck in a full breast, as the bundled demo masks are) is first
-  cropped to the lesion and re-centred in a frame matched to the zoomed image, so
-  the scores compare the *same* mass the crop shows rather than a speck in an empty
-  field; an already-cropped mask is resized directly.
+  the generated mask as a **fraction of the frame**. Statuses: `clinician_guided`
+  (an ROI bounded the finding — trusted), `acceptable_heuristic`,
+  `low_confidence_small` (mask `< MIN_MASS_FRAC = 4%` → the central object was
+  missed / under-segmented), `failed_broad_mask` (mask `> MAX_MASS_FRAC = 85%` →
+  the threshold flooded the crop), or `failed_no_mass` (nothing localized). Also
+  reports `roi_guided`.
 
 ### 7.10 AOI log (`routes.py → _write_aoi_log`)
 Every analysis writes a timestamped JSON to `backend/aoi_logs/` containing the
@@ -321,29 +293,28 @@ AOI profile and per-AOI records (without the heavy base64 image fields).
 
 ```jsonc
 {
-  "maps": { "intensity": "<b64 png>", "roughness": "...", "edges": "...", "density": "..." },
-  "relevance":      { "png": "<b64>", "threshold": 0.35, "threshold_method": "mass_otsu" },
   "generated_mask": { "size": 512, "area_px": 87800, "area_pct": 33.49, "png": "<b64>" },
-  "mask_comparison": { "dice_score": 0.83, "iou_score": 0.71 },   // or null
   "analysis_quality": { "localization_quality": "acceptable_heuristic",
-                        "quality_flags": [], "roi_guided": false,
-                        "frame_area_fraction": 0.3349, "quality_gate_thresholds": { ... } },
+                        "quality_flags": [], "roi_guided": false },
   "doctor_annotations": [ { "id": "A1", "kind": "rect", "type": "Mass",
                             "label": "central mass", "note": "follow up in 6 months" } ],
   "lesion_profile": {
     "image_label": "demo_case1_img.dcm",
     "is_there_an_aoi": "Yes", "aoi_count": 1,
     "aoi_shape": "Irregular", "aoi_margin": "ILL_DEFINED-SPICULATED",
-    "pathology": "malignant", "confidence": 1.0, "pathology_source": "ground_truth",
+    "pathology": "malignant", "confidence": 0.82, "pathology_source": "rule_based_demo",
     "localization_quality": "acceptable_heuristic", "quality_flags": [],
     "aois": [ {
-      "aoi_id": "aoi_1", "lesion_id": "aoi_1",
+      "aoi_id": "aoi_1",
       "shape": "Irregular", "margin": "ILL_DEFINED-SPICULATED",
-      "pathology": "malignant", "confidence": 1.0, "pathology_source": "ground_truth",
-      "geometry": { "area_px": ..., "bbox": [...], "centroid": [...], "circularity": ...,
-                    "solidity": ..., "lobulation_index": ..., "radial_spike_index": ...,
-                    "spiculation_convergence": ..., "area_mm2": null, "equiv_diameter_mm": null },
-      "crown_shyness": { "raw_score": ..., "interpretation": "ambiguous", ... },
+      "pathology": "malignant", "confidence": 0.82, "pathology_source": "rule_based_demo",
+      "geometry": { "area_px": ..., "area_pct": ..., "bbox": [...], "centroid": [...],
+                    "circularity": ..., "eccentricity": ..., "solidity": ...,
+                    "contour_roughness": ..., "lobulation_index": ...,
+                    "radial_spike_index": ..., "spiculation_convergence": ... },
+      "crown_shyness": { "raw_score": ..., "interpretation": "ambiguous",
+                         "gradient_sharpness": ..., "halo_width_std": ...,
+                         "transition_zone_entropy": ..., "boundary_visibility_ratio": ... },
       "margin_evidence": [ "low gradient sharpness", ... ],
       "outline": [ [x,y], ... ]
     } ]
@@ -352,11 +323,11 @@ AOI profile and per-AOI records (without the heavy base64 image fields).
 }
 ```
 
-`lesion_*` keys are duplicated as `aoi_*` for backward compatibility; the frontend
-prefers the `aoi_*` form. **There is no `explanation` field** — that AI layer was
+The profile uses `aoi_*` keys (`is_there_an_aoi`, `aoi_count`, `aoi_shape`,
+`aoi_margin`, `aois`). **There is no `explanation` field** — that AI layer was
 removed.
 
-### Label schema (`lesion_schema.py`)
+### Label schema (allowed values emitted by `classify.py`)
 - **Shape**: `Round, Oval, Lobulated, Irregular, Architectural_Distortion, Focal_Asymmetric_Density, Lymph_Node, Asymmetric_Breast_Tissue, N/A`.
 - **Margin**: `CIRCUMSCRIBED, CIRCUMSCRIBED-ILL_DEFINED, MICROLOBULATED, MICROLOBULATED-ILL_DEFINED-SPICULATED, ILL_DEFINED, ILL_DEFINED-SPICULATED, OBSCURED, OBSCURED-ILL_DEFINED, SPICULATED, N/A`.
 - **Pathology**: `malignant, benign, N/A`.
@@ -381,12 +352,10 @@ Proceed button.
 - **ROI annotation** (see §10).
 
 ### 9.3 Analysis screen (the third window)
-- **Map Legend** (left): intensity, roughness, edges, density, relevance, and the
-  generated AOI mask thumbnails.
 - **Scan stage** (centre): the rendered scan with a vector overlay canvas.
-  Toggles: Generated AOI mask, Bounding boxes, Crown Shyness halo, Relevance
-  heatmap, and **Doctor annotations**. The per-AOI vector overlay (halo + bbox) is
-  focused on the **largest AOI**.
+  Toggles: Generated AOI mask, Bounding boxes, Crown Shyness halo, and **Doctor
+  annotations**. The per-AOI vector overlay (halo + bbox) is focused on the
+  **largest AOI**.
 - **AOI Panel** (right): see §11.
 - **Results table** (bottom): image-level summary — label, AOI present, AOI count,
   shape, margin, pathology/risk + confidence.
@@ -446,15 +415,13 @@ The AOI Panel (analysis screen, right rail) shows exactly two sections:
    one was attached).
 2. **System analysis · largest AOI** — the `aoi_1` card (largest by
    `geometry.area_px`) with:
-   - a Risk/Pathology pill (label + confidence; "Pathology" when ground-truth,
-     "Risk" for the demo heuristic),
+   - a Risk pill (label + confidence from the demo heuristic),
    - shape and margin,
    - geometry: area (px + %), bbox, centroid, circularity, eccentricity, solidity,
      roughness, lobulation, spikes,
    - Crown Shyness boundary metrics: score + interpretation, sharpness, halo σ,
-     entropy, visibility, dark-ring flag,
-   - the margin-evidence list,
-   - an optional reference-mask Dice/IoU line.
+     entropy, visibility,
+   - the margin-evidence list.
 
 Only the largest AOI is detailed here (and highlighted on the scan); the bottom
 results table still reports the total AOI count and the image-level summary.
@@ -467,8 +434,6 @@ results table still reports the total AOI count and the image-level summary.
   sanitized filename). Runtime scratch; gitignored except `.gitkeep`.
 - `backend/aoi_logs/` — one timestamped JSON per analysis run. Gitignored.
 - `backend/demos/` — the three bundled CBIS-DDSM-style mass cases (image + mask).
-- Demo ground truth: an optional `case.json` sidecar next to a demo image can set
-  `ground_truth.pathology` to `malignant`/`benign`, which overrides the heuristic.
 
 ---
 

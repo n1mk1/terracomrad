@@ -150,7 +150,6 @@ def _keep_central(mask: np.ndarray, cy: float, cx: float) -> np.ndarray:
 
 def threshold_and_clean(
     rel: np.ndarray,
-    breast_mask: np.ndarray | None = None,
     method: str = "otsu",
     percentile: float = 96.0,
     roi_mask: np.ndarray | None = None,
@@ -213,11 +212,6 @@ def threshold_and_clean(
         return np.zeros((h, w), dtype=np.uint8), float(threshold), method_used
 
     return mask.astype(np.uint8), float(threshold), method_used
-
-
-def relevance_png(rel: np.ndarray) -> str:
-    """Render the mass-likelihood map as a base64 PNG (magma palette)."""
-    return to_png_b64(rel, "magma")
 
 
 def mask_png(mask: np.ndarray) -> str:

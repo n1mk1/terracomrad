@@ -41,7 +41,6 @@ def classify_shape(geom: dict) -> str:
 def classify_margin(geom: dict, css: dict) -> tuple[str, list[str]]:
     """Margin label plus the list of conditions that fired (used as evidence)."""
     sharpness = css["gradient_sharpness"]
-    width_std = css["halo_width_std"]
     entropy = css["transition_zone_entropy"]
     score = css["raw_score"]
     visibility = css["boundary_visibility_ratio"]

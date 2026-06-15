@@ -8,7 +8,6 @@ from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-APP_DIR = ROOT_DIR / "app"
 FRONTEND_DIR = ROOT_DIR / "frontend"
 BACKEND_DIR = ROOT_DIR / "backend"
 DEMO_DIR = BACKEND_DIR / "demos"

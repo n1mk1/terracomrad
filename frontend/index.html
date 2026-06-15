@@ -33,7 +33,7 @@
                         </label>
                     </div>
 
-                    <div class="upload-boxes" id="uploadBoxes">
+                    <div class="upload-boxes">
                         <div class="upload-box" id="baseBox">
                             <div class="upload-box-icon">
                                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
@@ -257,13 +257,8 @@
 
                 <div class="analysis-grid" id="analysisGrid">
 
-                    <aside class="map-legend" id="mapLegend">
-                        <div class="legend-header">Map Legend</div>
-                        <div class="legend-items" id="legendItems"></div>
-                    </aside>
-
                     <div class="scan-panel">
-                        <div class="scan-stage" id="scanStage">
+                        <div class="scan-stage">
                             <canvas id="scanCanvas" width="512" height="512"></canvas>
                             <canvas id="overlayCanvas" width="512" height="512"></canvas>
                         </div>
@@ -271,7 +266,6 @@
                             <label class="overlay-toggle"><input type="checkbox" id="togMask" checked> Generated mass mask</label>
                             <label class="overlay-toggle"><input type="checkbox" id="togBboxes" checked> Bounding boxes</label>
                             <label class="overlay-toggle"><input type="checkbox" id="togHalo" checked> Crown Shyness halo</label>
-                            <label class="overlay-toggle"><input type="checkbox" id="togRelevance"> Mass-likelihood heatmap</label>
                             <label class="overlay-toggle"><input type="checkbox" id="togAnnotations" checked> Doctor annotations</label>
                         </div>
                     </div>

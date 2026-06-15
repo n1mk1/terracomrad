@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from app.dicom_io import default_wwwl, dicom_to_png, extract_meta
 from app.paths import AOI_LOG_DIR
 from app.pipeline import run_pipeline
-from app.storage import DEMOS, UPLOAD_DIR, demo_sidecar, safe_filename
+from app.storage import DEMOS, UPLOAD_DIR, safe_filename
 
 router = APIRouter()
 
@@ -30,7 +30,7 @@ def _write_aoi_log(file_id: str, result: dict) -> dict:
     """Persist the full AOI card payload without heavy base64 image fields."""
     AOI_LOG_DIR.mkdir(parents=True, exist_ok=True)
     profile = result.get("lesion_profile") or {}
-    aois = profile.get("aois") or profile.get("lesions") or []
+    aois = profile.get("aois") or []
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     stem = safe_filename(file_id).rsplit(".", 1)[0]
     log_name = safe_filename(f"{timestamp}_{stem}_aoi_log.json")
@@ -43,7 +43,6 @@ def _write_aoi_log(file_id: str, result: dict) -> dict:
         "displayed_aoi_id": aois[0].get("aoi_id") if aois else None,
         "aoi_count": profile.get("aoi_count", len(aois)),
         "analysis_quality": result.get("analysis_quality"),
-        "mask_comparison": result.get("mask_comparison"),
         "doctor_annotations": result.get("doctor_annotations") or [],
         "generated_mask": {
             k: v for k, v in (result.get("generated_mask") or {}).items()
@@ -118,7 +117,6 @@ async def load_demo(name: str):
         "ww": ww,  "wl": wl,
         "mask_ww": mww, "mask_wl": mwl,
         "label": demo["label"],
-        "demo_id": name,
     }
 
 
@@ -127,19 +125,6 @@ async def render_image(file_id: str, ww: float | None = None, wl: float | None =
     _, ds = _read_dataset(file_id)
     buf = dicom_to_png(ds, ww, wl)
     return StreamingResponse(buf, media_type="image/png", headers={"Cache-Control": "no-store"})
-
-
-@router.post("/api/cleanup")
-async def cleanup_uploads(request: Request):
-    body = await request.json()
-    for fid in body.get("file_ids", []):
-        path = UPLOAD_DIR / safe_filename(fid)
-        if path.is_file():
-            try:
-                path.unlink()
-            except OSError:
-                pass
-    return {}
 
 
 async def _read_roi_body(request: Request) -> tuple[list[dict] | None, tuple[float, float] | None]:
@@ -172,31 +157,14 @@ async def process_dicom(
     file_id: str,
     ww: float | None = None,
     wl: float | None = None,
-    mask_file_id: str | None = None,
-    demo_id: str | None = None,
 ):
-    """Run the analysis pipeline. Returns the AOI profile + map previews."""
+    """Run the analysis pipeline. Returns the AOI profile + generated-mask preview."""
     safe_name, ds = _read_dataset(file_id)
 
     if ww is None or wl is None:
         dw, dl = default_wwwl(ds)
         ww = ww if ww is not None else dw
         wl = wl if wl is not None else dl
-
-    mask_ds = None
-    if mask_file_id:
-        try:
-            _, mask_ds = _read_dataset(mask_file_id)
-        except HTTPException:
-            mask_ds = None
-
-    ground_truth = None
-    if demo_id:
-        sidecar = demo_sidecar(demo_id)
-        if sidecar:
-            truth = (sidecar.get("ground_truth") or {}).get("pathology")
-            if truth in {"malignant", "benign"}:
-                ground_truth = truth
 
     rois, image_size = await _read_roi_body(request)
 
@@ -206,8 +174,6 @@ async def process_dicom(
         float(ww),
         float(wl),
         safe_name,
-        mask_ds,
-        ground_truth,
         rois,
         image_size,
     )

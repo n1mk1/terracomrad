@@ -28,8 +28,7 @@ backend/
   uploads/      Runtime/demo-copy workspace, ignored by git except .gitkeep
 ```
 
-Root `main.py` is a compatibility shim for older `uvicorn main:app` commands.
-Use `app.main:app` for deployment.
+Use `app.main:app` as the deployment entrypoint.
 
 ## Workflow
 

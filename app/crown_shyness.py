@@ -11,8 +11,6 @@ from scipy import ndimage
 
 BAND_RADIUS = 6                # pixels — half-width of the transition band around the contour
 VISIBILITY_FLOOR = 0.18        # minimum normalized gradient counted as a "visible" edge
-HALO_DARK_THRESHOLD = 0.20     # mean intensity below this marks a radiolucent halo
-HALO_MIN_FRACTION = 0.55       # fraction of contour required to be dark for halo presence
 
 
 def _gradient_magnitude(img: np.ndarray) -> np.ndarray:
@@ -98,17 +96,6 @@ def _halo_widths(component: np.ndarray, img: np.ndarray, ray_count: int = 64, ma
     return np.asarray(widths, dtype=float)
 
 
-def _radiolucent_halo(component: np.ndarray, img: np.ndarray) -> bool:
-    """Dark ring of width above a floor surrounding the AOI."""
-    structure = np.ones((3, 3), dtype=int)
-    dilated = ndimage.binary_dilation(component, structure=structure, iterations=BAND_RADIUS, border_value=0)
-    outer = dilated & ~component
-    if not outer.any():
-        return False
-    dark_share = float(np.mean(img[outer] < HALO_DARK_THRESHOLD))
-    return dark_share >= HALO_MIN_FRACTION
-
-
 def compute_css(lesion: dict, geometry: dict, img: np.ndarray,
                 breast_mask: np.ndarray | None = None,
                 gradient: np.ndarray | None = None) -> dict:
@@ -126,7 +113,6 @@ def compute_css(lesion: dict, geometry: dict, img: np.ndarray,
 
     halo_widths = _halo_widths(component, img)
     halo_widths_norm = halo_widths / max(1.0, float(halo_widths.max()) or 1.0)
-    halo_width_mean = float(halo_widths_norm.mean()) if halo_widths.size else 0.0
     halo_width_std = float(halo_widths_norm.std()) if halo_widths.size else 0.0
 
     if band.any():
@@ -172,11 +158,9 @@ def compute_css(lesion: dict, geometry: dict, img: np.ndarray,
         "raw_score": round(raw_score, 4),
         "interpretation": interpretation,
         "gradient_sharpness": round(gradient_sharpness, 4),
-        "halo_width_mean": round(halo_width_mean, 4),
         "halo_width_std": round(halo_width_std, 4),
         "transition_zone_entropy": round(entropy_norm, 4),
         "boundary_visibility_ratio": round(visibility, 4),
-        "radiolucent_halo_present": bool(_radiolucent_halo(component, img)),
         # Reused from geometry so the margin classifier reads everything from css.
         "radial_spike_index": float(geometry.get("radial_spike_index", 0.0)),
     }

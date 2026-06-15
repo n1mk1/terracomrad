@@ -91,7 +91,6 @@ approx("ellipse.solidity", g_ell["solidity"], 1.00, 0.05)
 check("ellipse -> Oval", classify_shape(g_ell) == "Oval", classify_shape(g_ell))
 
 g_rect = compute_geometry(extract_lesions(rect(200, 100))[0], rect(200, 100).astype(np.float32))
-approx("rect.extent", g_rect["extent"], 1.00, 0.05)
 approx("rect.circularity", g_rect["circularity"], 0.785, 0.10)
 
 g_star = compute_geometry(extract_lesions(star())[0], star().astype(np.float32))
