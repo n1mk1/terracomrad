@@ -5,8 +5,6 @@ Area-of-Interest analysis pipeline. The analysis input is a hyper-zoomed mass cr
 and the pipeline reproduces the radiologist's mass mask without any ML.
 Research/demo prototype — not for clinical use.
 
-📄 **Full system documentation:** [`DOCUMENTATION.md`](DOCUMENTATION.md)
-
 ## Project Layout
 
 ```text

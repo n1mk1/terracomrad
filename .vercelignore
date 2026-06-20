@@ -9,10 +9,6 @@ __pycache__/
 .env
 
 # Dev-only / non-runtime artifacts
-tests/
-DOCUMENTATION.md
-codeplan.md
-Procfile
 uv.lock
 
 # Runtime-generated data (the app recreates these; never source)

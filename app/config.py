@@ -2,7 +2,7 @@
 
 The core viewer and analysis pipeline never touch any of this — they stay fully
 local with no network calls. These settings gate *only* the optional, Gemini-backed
-"AI Insights" report (see ``app/insights.py`` and DOCUMENTATION.md §14). Values come
+"AI Insights" report (see ``app/insights.py``). Values come
 from environment variables, optionally seeded from a project-root ``.env`` file via a
 tiny KEY=VALUE parser (no ``python-dotenv`` dependency needed).
 """
