@@ -11,7 +11,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from app.classify import classify_margin, classify_pathology, classify_shape
-from app.crown_shyness import compute_css
+from app.crown_shyness import compute_css, normalize_gradient
 from app.lesions import compute_geometry, extract_lesions
 from app.maps import compute_maps
 from app.preprocess import ANALYSIS_SIZE, preprocess
@@ -194,11 +194,12 @@ def run_pipeline(
 
     candidates = extract_lesions(binary_mask)
 
+    mass_px = int(binary_mask.sum())
     response: dict = {
         "generated_mask": {
             "size": ANALYSIS_SIZE,
-            "area_px": int(binary_mask.sum()),
-            "area_pct": round(100.0 * float(binary_mask.sum()) / binary_mask.size, 4),
+            "area_px": mass_px,
+            "area_pct": round(100.0 * mass_px / binary_mask.size, 4),
             "png": mask_png(binary_mask),
         },
     }
@@ -212,9 +213,12 @@ def run_pipeline(
         return response
 
     lesions_payload: list[dict] = []
+    # The normalized gradient depends only on per-image inputs, so compute it
+    # once here instead of repeating it inside compute_css for every AOI.
+    grad_norm = normalize_gradient(gradient, breast_mask)
     for candidate in candidates:
         geometry = compute_geometry(candidate, img, gradient)
-        css = compute_css(candidate, geometry, img, breast_mask, gradient)
+        css = compute_css(candidate, geometry, img, breast_mask, gradient, grad_norm=grad_norm)
         shape_label = classify_shape(geometry)
         margin_label, margin_evidence = classify_margin(geometry, css)
         pathology_label, confidence = classify_pathology(shape_label, margin_label, geometry, css)

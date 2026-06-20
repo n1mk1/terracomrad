@@ -20,6 +20,15 @@
 
                 <div class="upload-layout">
 
+                    <!-- Left: typewriter intro -->
+                    <div class="intro-panel">
+                        <div class="intro-header">
+                            <span class="intro-eyebrow">Human-in-the-loop</span>
+                            <h2 class="intro-title">Doctors as the<br>Guardrail</h2>
+                        </div>
+                        <p class="intro-body">TerraComrad pairs AI mammogram analysis with the radiologist's judgment. The system scans each image at scale — segmenting masses, measuring shape and margin features, and scoring boundary characteristics with consistent precision. But precision is not a diagnosis. Here every algorithmic finding is evidence for the clinician to weigh, never a verdict to accept. Doctors draw their own regions of interest, interrogate the area-of-interest profile, and confirm or override what the model proposes — bringing patient history, clinical context, and expertise no algorithm can replicate. That is the guardrail model: AI narrows the search and structures the evidence; the physician decides what matters.</p>
+                    </div>
+
                     <div class="upload-main">
 
                 <div class="upload-panel">
@@ -124,7 +133,7 @@
                         </div>
 
                         <!-- Annotation (ROI) tools -->
-                        <div class="tool-group annot-group">
+                        <div class="tool-group">
                             <span class="target-label">Annotate</span>
                             <select class="annot-type-select" id="annotType" title="Finding type applied to new annotations">
                                 <option value="Mass">Mass</option>
@@ -256,6 +265,22 @@
                 <div class="analysis-error hidden" id="analysisError"></div>
 
                 <div class="analysis-grid" id="analysisGrid">
+
+                    <!-- Left: AI Insights (Gemini Flash) -->
+                    <aside class="insights-panel" id="insightsPanel">
+                        <div class="insights-header">
+                            <span>AI Insights</span>
+                            <span class="insights-provider" id="insightsProvider">Gemini</span>
+                        </div>
+                        <p class="insights-disclaimer">
+                            Educational decision-support only — not a diagnosis. Generating sends the
+                            rendered image and AOI metrics to Google Gemini.
+                        </p>
+                        <button class="btn btn-sm btn-accent insights-btn" id="btnGenInsights">Generate AI insights</button>
+                        <div class="insights-body" id="insightsBody">
+                            <div class="insights-empty">Run an analysis, then generate an AI narrative of the AOI profile.</div>
+                        </div>
+                    </aside>
 
                     <div class="scan-panel">
                         <div class="scan-stage">

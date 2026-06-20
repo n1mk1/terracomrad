@@ -1,6 +1,8 @@
 """HTTP routes — thin glue between requests and the backend services."""
 
 import asyncio
+import base64
+import binascii
 import io
 import json
 from datetime import datetime, timezone
@@ -9,7 +11,9 @@ import pydicom
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
+from app.config import settings as insights_settings
 from app.dicom_io import default_wwwl, dicom_to_png, extract_meta
+from app.insights import InsightsError, InsightsUnavailable, generate_insights
 from app.paths import AOI_LOG_DIR
 from app.pipeline import run_pipeline
 from app.storage import DEMOS, UPLOAD_DIR, safe_filename
@@ -63,6 +67,24 @@ def _write_aoi_log(file_id: str, result: dict) -> dict:
     }
     log_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return {"file": log_name, "path": str(log_path), "aoi_count": len(aois)}
+
+
+def _write_insights_log(file_id: str, profile: dict, result: dict) -> None:
+    """Persist a generated AI-insights report beside the AOI logs (best-effort)."""
+    AOI_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stem = safe_filename(file_id).rsplit(".", 1)[0]
+    log_path = AOI_LOG_DIR / safe_filename(f"{timestamp}_{stem}_insights.json")
+    payload = {
+        "created_at": timestamp,
+        "source_file_id": file_id,
+        "provider": result.get("provider"),
+        "model": result.get("model"),
+        "usage": result.get("usage"),
+        "profile": profile,
+        "report": result.get("report"),
+    }
+    log_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 @router.post("/api/upload")
@@ -178,4 +200,69 @@ async def process_dicom(
         image_size,
     )
     result["aoi_log"] = _write_aoi_log(safe_name, result)
+    return result
+
+
+@router.get("/api/insights/status")
+async def insights_status():
+    """Report whether the optional AI-insights layer is usable (never leaks the key)."""
+    return {
+        "enabled": insights_settings.configured,
+        "provider": insights_settings.provider,
+        "model": insights_settings.model if insights_settings.configured else None,
+        "max_image_mb": insights_settings.max_image_mb,
+    }
+
+
+@router.post("/api/insights/{file_id}")
+async def insights(file_id: str, request: Request):
+    """Generate an AI narrative for an analyzed AOI via one multimodal Gemini call.
+
+    Body: ``{image_png_b64, profile}`` — the flattened scan+overlay PNG (base64,
+    optionally a data URL) and the compact AOI profile built on the analysis screen.
+    Returns ``{report, model, provider, usage, cached}``; 503 when the feature is
+    not configured.
+    """
+    if not insights_settings.configured:
+        raise HTTPException(
+            503,
+            "AI insights are not configured. Set INSIGHTS_API_KEY (or GEMINI_API_KEY) in .env.",
+        )
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "Invalid JSON body")
+    if not isinstance(body, dict):
+        raise HTTPException(400, "Invalid JSON body")
+
+    image_b64 = str(body.get("image_png_b64") or "")
+    profile = body.get("profile") if isinstance(body.get("profile"), dict) else {}
+    if not image_b64:
+        raise HTTPException(400, "Missing image_png_b64")
+    if image_b64.startswith("data:") and "," in image_b64:
+        image_b64 = image_b64.split(",", 1)[1]
+
+    try:
+        image_bytes = base64.b64decode(image_b64, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(400, "image_png_b64 is not valid base64")
+
+    max_bytes = int(insights_settings.max_image_mb * 1024 * 1024)
+    if len(image_bytes) > max_bytes:
+        raise HTTPException(413, f"Composite image exceeds {insights_settings.max_image_mb} MB limit")
+
+    try:
+        result = await generate_insights(image_bytes, profile)
+    except InsightsUnavailable as exc:
+        raise HTTPException(503, str(exc))
+    except InsightsError as exc:
+        raise HTTPException(502, str(exc))
+
+    try:
+        _write_insights_log(file_id, profile, result)
+    except OSError:
+        pass
+
+    result["cached"] = False
     return result

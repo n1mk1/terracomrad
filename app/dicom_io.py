@@ -61,6 +61,20 @@ def default_wwwl(ds) -> tuple[float, float]:
     return round(ww, 1), round(wl, 1)
 
 
+def window_to_uint8(pixels: np.ndarray, ww: float, wl: float) -> np.ndarray:
+    """Clip a float pixel array to the WW/WL window and scale to uint8 [0,255].
+
+    Shared by the viewer render (``dicom_to_png``) and the analysis preprocessor
+    so both apply identical windowing. A degenerate window (hi <= lo) maps to all
+    zeros, matching the prior behavior in both call sites.
+    """
+    lo, hi = wl - ww / 2.0, wl + ww / 2.0
+    if hi <= lo:
+        return np.zeros(pixels.shape, dtype=np.uint8)
+    clipped = np.clip(pixels, lo, hi)
+    return ((clipped - lo) / (hi - lo) * 255).astype(np.uint8)
+
+
 def dicom_to_png(ds, ww: float | None, wl: float | None) -> io.BytesIO:
     """Render a DICOM dataset as a PNG byte stream with the given window/level."""
     try:
@@ -81,12 +95,10 @@ def dicom_to_png(ds, ww: float | None, wl: float | None) -> io.BytesIO:
             dw, dl = default_wwwl(ds)
             ww = ww if ww is not None else dw
             wl = wl if wl is not None else dl
-        lo, hi = wl - ww / 2, wl + ww / 2
-        pixels = np.clip(pixels, lo, hi)
-        pixels = ((pixels - lo) / (hi - lo) * 255).astype(np.uint8) if hi > lo else np.zeros_like(pixels, dtype=np.uint8)
+        scaled = window_to_uint8(pixels, ww, wl)
         if photometric == "MONOCHROME1":
-            pixels = 255 - pixels
-        img = Image.fromarray(pixels, "L")
+            scaled = 255 - scaled
+        img = Image.fromarray(scaled, "L")
 
     buf = io.BytesIO()
     img.save(buf, format="PNG")

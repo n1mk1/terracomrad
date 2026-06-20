@@ -11,7 +11,3 @@ backend/uploads/*
 !backend/uploads/.gitkeep
 backend/aoi_logs/*
 !backend/aoi_logs/.gitkeep
-
-# Claude Code local settings + AI working notes (machine-specific, not project code)
-.claude/settings.local.json
-/memory/

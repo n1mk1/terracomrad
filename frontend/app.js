@@ -93,6 +93,11 @@ const togAnnotations    = document.getElementById('togAnnotations');
 const btnBackToViewer   = document.getElementById('btnBackToViewer');
 const btnReanalyze      = document.getElementById('btnReanalyze');
 
+const insightsPanel     = document.getElementById('insightsPanel');
+const insightsBody      = document.getElementById('insightsBody');
+const insightsProvider  = document.getElementById('insightsProvider');
+const btnGenInsights    = document.getElementById('btnGenInsights');
+
 /* ── Annotation (ROI) DOM ─────────────────────────────────── */
 const annotLayer    = document.getElementById('annotLayer');
 const annotType     = document.getElementById('annotType');
@@ -248,6 +253,80 @@ const CSS_COLORS = {
 };
 const NEUTRAL_COLOR = '#7a7a90';
 
+/* ── Metric tooltips ──────────────────────────────────────────
+   Each entry explains a metric and, for the scored features, what a
+   HIGH vs LOW value means — so the panel stays curated while the
+   reasoning is one hover (or focus) away. `\n` becomes a line break. */
+const TIPS = {
+    // Headline / key metrics
+    detection:   { t: 'Detection',   b: 'Whether the system isolated a compact area of interest (AOI).\nDriven by mass compactness and how much breast area it occupies.' },
+    count:       { t: 'AOI count',   b: 'Number of distinct candidate masses found.\nThe panel profiles the largest; smaller ones are still counted here.' },
+    shape:       { t: 'Shape',       b: 'Geometric form of the mass, from circularity, elongation, convexity, lobulation and spikes.\nHigh circularity + convex → Round / Oval.\nSpiky or concave → Irregular.' },
+    margin:      { t: 'Margin',      b: 'Character of the mass boundary.\nSpiculated / ill-defined → more suspicious.\nCircumscribed (sharp, even) → more reassuring.' },
+    risk:        { t: 'Risk (demo)', b: 'Heuristic malignancy score from margin + shape features.\nHigh % → more suspicious.\nExplainable demo heuristic, not a trained model.' },
+    // Geometry
+    area:        { t: 'Area',         b: 'Size of the AOI in pixels and as a share of the breast region.' },
+    circularity: { t: 'Circularity',  b: 'High (→1): round, circular outline.\nLow (→0): elongated or jagged.' },
+    eccentricity:{ t: 'Eccentricity', b: 'High (→1): elongated, line-like.\nLow (→0): near-circular.' },
+    solidity:    { t: 'Solidity',     b: 'High (→1): convex, smooth-bodied.\nLow: dimpled / concave — typical of spiculated masses.' },
+    roughness:   { t: 'Contour roughness', b: 'High: jagged, irregular outline.\nLow: smooth outline.' },
+    lobulation:  { t: 'Lobulation',   b: 'High: many rounded outward lobes.\nLow: a single smooth body.' },
+    spikes:      { t: 'Radial spikes', b: 'High: sharp radial spicules — suspicious.\nLow: no spikes.' },
+    convergence: { t: 'Spiculation convergence', b: 'High: surrounding gradients radiate toward the mass (spiculation).\nLow: smooth, undisturbed surround.' },
+    // Crown Shyness boundary metrics
+    score:       { t: 'Crown Shyness score', b: 'High: strong, well-defined boundary that respects surrounding tissue.\nLow: weak or invasive-looking boundary.' },
+    sharpness:   { t: 'Gradient sharpness',  b: 'High: crisp edge transition.\nLow: blurred, ill-defined edge.' },
+    halo:        { t: 'Halo width σ',        b: 'High: uneven halo thickness around the mass.\nLow: uniform halo.' },
+    entropy:     { t: 'Transition-zone entropy', b: 'High: noisy, disordered rim.\nLow: clean, ordered boundary.' },
+    visibility:  { t: 'Boundary visibility', b: 'High: most of the boundary is visible.\nLow: boundary obscured by overlapping tissue.' },
+};
+
+// One reusable floating bubble, positioned next to whatever is hovered/focused.
+const tipPop = document.createElement('div');
+tipPop.className = 'tip-pop';
+document.body.appendChild(tipPop);
+
+function tipI(key, note) {
+    const noteAttr = note ? ` data-tip-note="${escapeHtml(note)}"` : '';
+    return `<span class="tip-i" data-tip="${key}"${noteAttr} tabindex="0" role="img" aria-label="What this means">i</span>`;
+}
+
+function showTip(el) {
+    const def = TIPS[el.dataset.tip];
+    if (!def) return;
+    const note = el.dataset.tipNote;
+    tipPop.innerHTML =
+        `<div class="tip-pop-t">${escapeHtml(def.t)}</div>` +
+        `<div class="tip-pop-b">${escapeHtml(def.b).replace(/\n/g, '<br>')}</div>` +
+        (note ? `<div class="tip-pop-note">${escapeHtml(note)}</div>` : '');
+    positionTip(el);
+    tipPop.classList.add('show');
+}
+function positionTip(el) {
+    const r = el.getBoundingClientRect();
+    const pr = tipPop.getBoundingClientRect();   // visibility:hidden still has layout
+    let top  = r.top - pr.height - 8;
+    if (top < 8) top = r.bottom + 8;             // flip below when no room above
+    let left = r.left + r.width / 2 - pr.width / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - pr.width - 8));
+    tipPop.style.top  = `${top}px`;
+    tipPop.style.left = `${left}px`;
+}
+function hideTip() { tipPop.classList.remove('show'); }
+
+document.addEventListener('mouseover', e => {
+    const el = e.target.closest('[data-tip]');
+    if (el) showTip(el);
+});
+document.addEventListener('mouseout', e => {
+    const el = e.target.closest('[data-tip]');
+    if (el && !el.contains(e.relatedTarget)) hideTip();
+});
+document.addEventListener('focusin',  e => { const el = e.target.closest('[data-tip]'); if (el) showTip(el); });
+document.addEventListener('focusout', hideTip);
+window.addEventListener('scroll', hideTip, true);   // capture: also catches panel scroll
+window.addEventListener('resize', hideTip);
+
 btnStartAnalysis.addEventListener('click', () => runAnalysis());
 btnReanalyze.addEventListener('click',     () => runAnalysis());
 btnBackToViewer.addEventListener('click',  showViewer);
@@ -334,6 +413,7 @@ async function runAnalysis() {
 function renderAnalysis(data) {
     analysisLoading.classList.add('hidden');
     currentAnalysis = data;
+    resetInsights();   // a fresh analysis invalidates any prior AI report
     const aois = (data.lesion_profile && data.lesion_profile.aois) || [];
     selectedLesionId = aois[0] ? aois[0].aoi_id : null;
     renderResultsTable(data);
@@ -375,9 +455,7 @@ function renderLesionCards(data) {
     if (!lesions.length) {
         sysHtml = '<div class="aoi-none">No AOI candidates detected by the system.</div>';
     } else {
-        const largest = lesions.reduce((best, l) =>
-            ((l.geometry && l.geometry.area_px) || 0) > ((best.geometry && best.geometry.area_px) || 0) ? l : best,
-            lesions[0]);
+        const largest = largestByArea(lesions);
         selectedLesionId = largest.aoi_id;
         sysHtml = systemAoiCard(largest, lesions.length);
     }
@@ -403,40 +481,57 @@ function systemAoiCard(lesion, totalCount) {
     const interp = css.interpretation || 'ambiguous';
     const color = CSS_COLORS[interp] || NEUTRAL_COLOR;
     const conf = lesion.confidence != null ? `${(lesion.confidence * 100).toFixed(0)}%` : '—';
-    const pillPrefix = 'Risk';
-    const evidence = (lesion.margin_evidence || []).map(e => `<li>${escapeHtml(e)}</li>`).join('');
+
+    // ── Curated verdicts ──
+    // The two "diffuse" shapes are the only non-compact findings the classifier emits.
+    const diffuse   = lesion.shape === 'Architectural_Distortion' || lesion.shape === 'Focal_Asymmetric_Density';
+    const detection = diffuse ? 'Yes · diffuse finding' : 'Yes · compact mass';
+    const countText = `${totalCount} AOI${totalCount === 1 ? '' : 's'}`;
+    // The per-lesion margin evidence becomes the "why" line inside the Margin tooltip.
+    const evidence  = lesion.margin_evidence || [];
+    const marginWhy = evidence.length ? `Why: ${evidence.join('; ')}` : '';
+
     const countNote = totalCount > 1
         ? `<div class="aoi-subnote">Largest of ${totalCount} detected AOIs.</div>`
         : '';
+    const areaText = `${geom.area_px ?? '—'} px (${formatNum(geom.area_pct)}%)`;
+
     return `
         <div class="lesion-card selected" data-lesion="${aoiId}" style="--lesion-color:${color}">
             <div class="lesion-card-head">
                 <span class="lesion-id">${aoiId}</span>
-                <span class="lesion-pill ${pathologyClass(lesion.pathology)}">${pillPrefix}: ${escapeHtml(lesion.pathology || 'N/A')} · ${conf}</span>
+                <span class="lesion-pill ${pathologyClass(lesion.pathology)}" data-tip="risk" tabindex="0">Risk: ${escapeHtml(lesion.pathology || 'N/A')} · ${conf}</span>
             </div>
             ${countNote}
-            <dl class="lesion-kv">
-                <dt>Shape</dt><dd>${escapeHtml(lesion.shape || 'N/A')}</dd>
-                <dt>Margin</dt><dd>${escapeHtml(lesion.margin || 'N/A')}</dd>
-                <dt>Area</dt><dd>${geom.area_px ?? '—'} px (${formatNum(geom.area_pct)}%)</dd>
-                <dt>Bbox</dt><dd>${(geom.bbox || []).join(', ') || '—'}</dd>
-                <dt>Centroid</dt><dd>${(geom.centroid || []).map(n => Math.round(n)).join(', ') || '—'}</dd>
-                <dt>Circularity</dt><dd>${formatNum(geom.circularity)}</dd>
-                <dt>Eccentricity</dt><dd>${formatNum(geom.eccentricity)}</dd>
-                <dt>Solidity</dt><dd>${formatNum(geom.solidity)}</dd>
-                <dt>Roughness</dt><dd>${formatNum(geom.contour_roughness)}</dd>
-                <dt>Lobulation</dt><dd>${formatNum(geom.lobulation_index)}</dd>
-                <dt>Spikes</dt><dd>${formatNum(geom.radial_spike_index)}</dd>
+            <dl class="metric-kv">
+                <dt>Detection ${tipI('detection')}</dt><dd>${detection}</dd>
+                <dt>Count ${tipI('count')}</dt><dd>${countText}</dd>
+                <dt>Shape ${tipI('shape')}</dt><dd>${escapeHtml(lesion.shape || 'N/A')}</dd>
+                <dt>Margin ${tipI('margin', marginWhy)}</dt><dd>${escapeHtml(lesion.margin || 'N/A')}</dd>
             </dl>
-            <div class="lesion-kv-sep">Crown Shyness · boundary metrics</div>
-            <dl class="lesion-kv">
-                <dt>Score</dt><dd>${formatNum(css.raw_score)} <span class="lesion-interp">${escapeHtml(interp)}</span></dd>
-                <dt>Sharpness</dt><dd>${formatNum(css.gradient_sharpness)}</dd>
-                <dt>Halo σ</dt><dd>${formatNum(css.halo_width_std)}</dd>
-                <dt>Entropy</dt><dd>${formatNum(css.transition_zone_entropy)}</dd>
-                <dt>Visibility</dt><dd>${formatNum(css.boundary_visibility_ratio)}</dd>
-            </dl>
-            ${evidence ? `<div class="lesion-kv-sep">Margin evidence</div><ul class="lesion-evidence">${evidence}</ul>` : ''}
+            <details class="advanced-metrics">
+                <summary>Advanced metrics · geometry + Crown Shyness</summary>
+                <dl class="lesion-kv">
+                    <dt data-tip="area" tabindex="0">Area</dt><dd>${areaText}</dd>
+                    <dt>Bbox</dt><dd>${(geom.bbox || []).join(', ') || '—'}</dd>
+                    <dt>Centroid</dt><dd>${(geom.centroid || []).map(n => Math.round(n)).join(', ') || '—'}</dd>
+                    <dt data-tip="circularity" tabindex="0">Circularity</dt><dd>${formatNum(geom.circularity)}</dd>
+                    <dt data-tip="eccentricity" tabindex="0">Eccentricity</dt><dd>${formatNum(geom.eccentricity)}</dd>
+                    <dt data-tip="solidity" tabindex="0">Solidity</dt><dd>${formatNum(geom.solidity)}</dd>
+                    <dt data-tip="roughness" tabindex="0">Roughness</dt><dd>${formatNum(geom.contour_roughness)}</dd>
+                    <dt data-tip="lobulation" tabindex="0">Lobulation</dt><dd>${formatNum(geom.lobulation_index)}</dd>
+                    <dt data-tip="spikes" tabindex="0">Spikes</dt><dd>${formatNum(geom.radial_spike_index)}</dd>
+                    <dt data-tip="convergence" tabindex="0">Convergence</dt><dd>${formatNum(geom.spiculation_convergence)}</dd>
+                </dl>
+                <div class="lesion-kv-sep">Crown Shyness · boundary metrics</div>
+                <dl class="lesion-kv">
+                    <dt data-tip="score" tabindex="0">Score</dt><dd>${formatNum(css.raw_score)} <span class="lesion-interp">${escapeHtml(interp)}</span></dd>
+                    <dt data-tip="sharpness" tabindex="0">Sharpness</dt><dd>${formatNum(css.gradient_sharpness)}</dd>
+                    <dt data-tip="halo" tabindex="0">Halo σ</dt><dd>${formatNum(css.halo_width_std)}</dd>
+                    <dt data-tip="entropy" tabindex="0">Entropy</dt><dd>${formatNum(css.transition_zone_entropy)}</dd>
+                    <dt data-tip="visibility" tabindex="0">Visibility</dt><dd>${formatNum(css.boundary_visibility_ratio)}</dd>
+                </dl>
+            </details>
         </div>`;
 }
 
@@ -518,9 +613,7 @@ function drawOverlays() {
 
     const lesions = (currentAnalysis.lesion_profile && currentAnalysis.lesion_profile.aois) || [];
     // Focus the per-AOI overlay on the largest AOI — the one shown in the panel.
-    const largest = lesions.length
-        ? lesions.reduce((best, l) => ((l.geometry && l.geometry.area_px) || 0) > ((best.geometry && best.geometry.area_px) || 0) ? l : best, lesions[0])
-        : null;
+    const largest = lesions.length ? largestByArea(lesions) : null;
     [largest].filter(Boolean).forEach(lesion => {
         const aoiId = lesion.aoi_id;
         const interp = lesion.crown_shyness?.interpretation || 'ambiguous';
@@ -575,6 +668,7 @@ function resetAnalysisUi() {
     lesionCards.innerHTML = '';
     resultsRow.innerHTML = '<td colspan="6" class="results-empty">Run an analysis to populate the AOI profile.</td>';
     clearOverlays();
+    resetInsights();
     btnStartAnalysis.textContent = 'Start Analysis';
     btnStartAnalysis.classList.remove('running');
     btnStartAnalysis.disabled = false;
@@ -590,6 +684,14 @@ function pathologyClass(p) {
 function formatNum(v) {
     if (v == null || Number.isNaN(Number(v))) return '—';
     return Number(v).toFixed(3);
+}
+
+// The dominant AOI = largest by segmented area. Used for the panel card, the
+// per-AOI overlay focus, and the AI-insight profile so they always agree.
+function largestByArea(list) {
+    return list.reduce((best, l) =>
+        ((l.geometry && l.geometry.area_px) || 0) > ((best.geometry && best.geometry.area_px) || 0) ? l : best,
+        list[0]);
 }
 
 function escapeHtml(str) {
@@ -1197,21 +1299,24 @@ function renderAnnotChips() {
             </span>`).join('')
         : '<span class="annot-empty">No annotations yet.</span>';
 
-    annotChips.querySelectorAll('.annot-chip').forEach(chip => {
-        chip.addEventListener('click', e => {
-            if (e.target.closest('.annot-chip-del') || e.target.closest('.annot-chip-note')) return;
-            selectAnnot(chip.dataset.id);
-        });
-        chip.addEventListener('dblclick', () => renameAnnot(chip.dataset.id));
-    });
-    annotChips.querySelectorAll('.annot-chip-note').forEach(btn => {
-        btn.addEventListener('click', e => { e.stopPropagation(); noteAnnot(btn.dataset.note); });
-    });
-    annotChips.querySelectorAll('.annot-chip-del').forEach(btn => {
-        btn.addEventListener('click', e => { e.stopPropagation(); deleteAnnot(btn.dataset.del); });
-    });
     updateAnnotHint();
 }
+
+// Chip interactions are delegated (bound once) because renderAnnotChips rebuilds
+// the chip markup via innerHTML on every annotation change. Buttons are checked
+// before chip-select, matching the prior stopPropagation + early-return logic.
+annotChips.addEventListener('click', e => {
+    const del = e.target.closest('[data-del]');
+    if (del) { deleteAnnot(del.dataset.del); return; }
+    const note = e.target.closest('[data-note]');
+    if (note) { noteAnnot(note.dataset.note); return; }
+    const chip = e.target.closest('.annot-chip');
+    if (chip) selectAnnot(chip.dataset.id);
+});
+annotChips.addEventListener('dblclick', e => {
+    const chip = e.target.closest('.annot-chip');
+    if (chip) renameAnnot(chip.dataset.id);
+});
 function updateAnnotButtons() {
     const has = annotations.length > 0;
     btnAnnotUndo.disabled  = !has;
@@ -1297,3 +1402,211 @@ function drawDoctorAnnotations(ctx, sx, sy) {
     }
     ctx.restore();
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   AI Insights (optional Gemini layer)
+
+   Flattens the analysis screen's scan + overlay canvases into one PNG,
+   packages the compact AOI profile (built from data already in hand — no
+   pipeline re-run), and POSTs both to /api/insights for a single multimodal
+   Gemini call. The returned fixed-schema report renders in the left rail.
+   Educational decision-support only — never a verdict.
+   ══════════════════════════════════════════════════════════════════ */
+let insightsBusy       = false;
+let insightsConfigured = null;   // null = unknown until the status check resolves
+
+const INSIGHT_SECTIONS = [
+    ['detection_summary',    'Detection'],
+    ['shape_assessment',     'Shape'],
+    ['margin_assessment',    'Margin'],
+    ['risk_discussion',      'Risk discussion'],
+    ['birads_suggestion',    'BI-RADS suggestion'],
+    ['recommended_followup', 'Recommended follow-up'],
+    ['limitations',          'Limitations'],
+];
+
+async function fetchInsightsStatus() {
+    try {
+        const res = await fetch('/api/insights/status');
+        if (!res.ok) return;
+        const s = await res.json();
+        insightsConfigured = !!s.enabled;
+        if (s.provider) {
+            insightsProvider.textContent = s.provider.charAt(0).toUpperCase() + s.provider.slice(1);
+        }
+        if (!insightsConfigured) reflectInsightsDisabled();
+    } catch { /* leave defaults; the POST surfaces a clear 503 if disabled */ }
+}
+
+function reflectInsightsDisabled() {
+    btnGenInsights.disabled = true;
+    btnGenInsights.title = 'Set INSIGHTS_API_KEY (or GEMINI_API_KEY) in .env to enable';
+    insightsBody.innerHTML =
+        '<div class="insights-empty">AI insights are not configured. Add a free Gemini API key ' +
+        '(<code>INSIGHTS_API_KEY</code>) to <code>.env</code> and restart the server.</div>';
+}
+
+function resetInsights() {
+    if (insightsConfigured === false) { reflectInsightsDisabled(); return; }
+    btnGenInsights.disabled = false;
+    btnGenInsights.textContent = 'Generate AI insights';
+    insightsBody.innerHTML =
+        '<div class="insights-empty">Run an analysis, then generate an AI narrative of the AOI profile.</div>';
+}
+
+// Flatten scan + overlay into one same-origin PNG data URL (WYSIWYG).
+function compositeAnalysisImage() {
+    const w = scanCanvas.width, h = scanCanvas.height;
+    const tmp = document.createElement('canvas');
+    tmp.width = w; tmp.height = h;
+    const ctx = tmp.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(scanCanvas, 0, 0, w, h);
+    ctx.drawImage(overlayCanvas, 0, 0, w, h);
+    return tmp.toDataURL('image/png');
+}
+
+// Compact, de-duplicated subset of the profile (rounded floats, no base64).
+function buildInsightProfile(data) {
+    const lp = (data && data.lesion_profile) || {};
+    const aois = lp.aois || [];
+    const r3 = v => (v == null || Number.isNaN(Number(v))) ? null : Number(Number(v).toFixed(3));
+
+    const profile = {
+        image_label: lp.image_label || state.fileId || null,
+        detection:   lp.is_there_an_aoi === 'Yes' ? 'Yes' : 'No',
+        aoi_count:   lp.aoi_count ?? 0,
+        method_note: 'Rule-based explainable demo classifier, not a trained model.',
+    };
+
+    if (aois.length) {
+        const largest = largestByArea(aois);
+        const g = largest.geometry || {}, cs = largest.crown_shyness || {};
+        profile.displayed_aoi = {
+            id: largest.aoi_id,
+            shape: largest.shape,
+            margin: largest.margin,
+            margin_evidence: largest.margin_evidence || [],
+            risk: { label: largest.pathology, confidence: r3(largest.confidence) },
+            geometry: {
+                area_pct: r3(g.area_pct),     circularity:  r3(g.circularity),
+                eccentricity: r3(g.eccentricity), solidity: r3(g.solidity),
+                roughness: r3(g.contour_roughness), lobulation: r3(g.lobulation_index),
+                spikes: r3(g.radial_spike_index), convergence: r3(g.spiculation_convergence),
+            },
+            crown_shyness: {
+                score: r3(cs.raw_score),       sharpness:  r3(cs.gradient_sharpness),
+                halo_std: r3(cs.halo_width_std), entropy:  r3(cs.transition_zone_entropy),
+                visibility: r3(cs.boundary_visibility_ratio),
+            },
+        };
+    }
+
+    if (annotations.length) {
+        profile.doctor_annotations = annotations.map(a => ({
+            id: a.id, type: a.label || a.type, note: a.note || '',
+        }));
+    }
+    return profile;
+}
+
+async function generateInsights() {
+    if (!currentAnalysis || insightsBusy) return;
+    insightsBusy = true;
+    btnGenInsights.disabled = true;
+    insightsBody.innerHTML =
+        '<div class="insights-loading"><div class="spinner"></div><span>Asking Gemini…</span></div>';
+
+    try {
+        const body = {
+            image_png_b64: compositeAnalysisImage(),
+            profile: buildInsightProfile(currentAnalysis),
+        };
+        const res = await fetch(`/api/insights/${enc(state.fileId)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+            const detail = (await res.json().catch(() => ({}))).detail || `Error ${res.status}`;
+            throw new Error(detail);
+        }
+        const out = await res.json();
+        currentAnalysis._insights = out;
+        renderInsights(out);
+    } catch (err) {
+        insightsBody.innerHTML =
+            `<div class="insights-error">AI insights failed: ${escapeHtml(err.message)}</div>`;
+        btnGenInsights.textContent = 'Try again';
+    } finally {
+        insightsBusy = false;
+        btnGenInsights.disabled = (insightsConfigured === false);
+    }
+}
+
+/* Minimal, XSS-safe Markdown → HTML for the narrative fields. Escapes first,
+   then formats a small subset (bold, italic, inline code, bullet / numbered
+   lists, paragraphs) so the report reads as prose instead of raw JSON text. */
+function mdInline(s) {
+    return s
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+
+function renderMarkdownInline(src) {
+    return mdInline(escapeHtml(String(src ?? '').trim()));
+}
+
+function renderMarkdown(src) {
+    const text = String(src ?? '').trim();
+    if (!text) return '';
+    const out = [];
+    let list = null;          // 'ul' | 'ol' currently open
+    let para = [];
+    const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+    const flushPara = () => {
+        if (para.length) { out.push(`<p>${mdInline(escapeHtml(para.join(' ')))}</p>`); para = []; }
+    };
+    for (const raw of text.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (!line) { flushPara(); closeList(); continue; }
+        let m;
+        if ((m = line.match(/^[-*•]\s+(.+)$/))) {
+            flushPara();
+            if (list !== 'ul') { closeList(); out.push('<ul>'); list = 'ul'; }
+            out.push(`<li>${mdInline(escapeHtml(m[1]))}</li>`);
+        } else if ((m = line.match(/^\d+[.)]\s+(.+)$/))) {
+            flushPara();
+            if (list !== 'ol') { closeList(); out.push('<ol>'); list = 'ol'; }
+            out.push(`<li>${mdInline(escapeHtml(m[1]))}</li>`);
+        } else {
+            closeList();
+            para.push(line);
+        }
+    }
+    flushPara(); closeList();
+    return out.join('');
+}
+
+function renderInsights(out) {
+    const r = (out && out.report) || {};
+    const usage = (out && out.usage) || {};
+    const sections = INSIGHT_SECTIONS
+        .filter(([k]) => r[k])
+        .map(([k, label]) =>
+            `<div class="insight-sec"><div class="insight-sec-h">${label}</div>` +
+            `<div class="insight-sec-b">${renderMarkdown(r[k])}</div></div>`)
+        .join('');
+    const tokens = usage.total_token_count ? ` · ${usage.total_token_count} tok` : '';
+    insightsBody.innerHTML =
+        (r.headline ? `<div class="insight-headline">${renderMarkdownInline(r.headline)}</div>` : '') +
+        sections +
+        `<div class="insight-disclaimer-foot">${renderMarkdownInline(r.disclaimer || 'Educational decision-support only; not a diagnosis.')}</div>` +
+        `<div class="insight-usage">${escapeHtml(out.model || '')}${tokens}${out.cached ? ' · cached' : ''}</div>`;
+    btnGenInsights.textContent = 'Regenerate';
+}
+
+btnGenInsights.addEventListener('click', generateInsights);
+fetchInsightsStatus();

@@ -59,11 +59,52 @@ body {
 /* ── Upload panel ───────────────────────────────── */
 .upload-layout {
     width: 100%;
-    max-width: 1040px;
+    max-width: 1160px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 32px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 40px;
     align-items: start;
+}
+
+/* ── Intro / typewriter panel ───────────────────── */
+.intro-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 32px 30px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    align-self: stretch;
+}
+
+.intro-header {
+    display: flex;
+    flex-direction: column;
+}
+
+.intro-eyebrow {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--accent);
+}
+
+.intro-title {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -.025em;
+    color: var(--text);
+    line-height: 1.15;
+    margin-top: 8px;
+}
+
+.intro-body {
+    font-size: 14px;
+    color: var(--text-sub);
+    line-height: 1.85;
+    flex: 1;
 }
 
 .upload-main {
@@ -134,6 +175,7 @@ body {
 }
 .toggle-switch input:checked + .toggle-track { background: var(--accent); }
 .toggle-switch input:checked + .toggle-track .toggle-thumb { left: 18px; }
+.toggle-label { white-space: nowrap; }
 
 /* ── Upload boxes ───────────────────────────────── */
 .upload-boxes {
@@ -275,8 +317,6 @@ body {
 
 /* ── Workspace ──────────────────────────────────── */
 .workspace        { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.workspace.hidden { display: none; }
-
 /* ── Toolbar ────────────────────────────────────── */
 .toolbar {
     display: flex;
@@ -310,8 +350,6 @@ body {
 
 .tool-group { display: flex; align-items: center; gap: 3px; }
 .tool-group + .tool-group { margin-left: 6px; padding-left: 6px; border-left: 1px solid var(--border-2); }
-.tool-group.hidden { display: none; }
-
 .target-label {
     font-size: 10px;
     font-weight: 700;
@@ -376,8 +414,6 @@ body {
     background: rgba(0,0,0,.45);
     z-index: 10;
 }
-.spinner-wrap.hidden { display: none; }
-
 .spinner {
     width: 30px;
     height: 30px;
@@ -398,8 +434,6 @@ body {
 }
 .target-ring.base { border: 2px solid rgba(79,142,247,.5); }
 .target-ring.mask { border: 2px solid rgba(52,211,153,.5); }
-.target-ring.hidden { display: none; }
-
 .img-error {
     position: absolute;
     inset: 0;
@@ -412,8 +446,6 @@ body {
     text-align: center;
     z-index: 6;
 }
-.img-error.hidden { display: none; }
-
 /* ── WW/WL controls bar ─────────────────────────── */
 .controls-bar {
     display: flex;
@@ -472,8 +504,6 @@ body {
     max-height: 180px;
     overflow-y: auto;
 }
-.meta-grid.hidden { display: none; }
-
 .meta-key { font-size: 11px; color: var(--text-sub); white-space: nowrap; }
 .meta-val { font-size: 11px; color: var(--text); font-family: 'Menlo','Consolas',monospace; word-break: break-all; }
 
@@ -501,7 +531,6 @@ body {
     gap: 8px;
     flex-wrap: wrap;
 }
-.mask-controls.hidden { display: none; }
 .ctrl-sep { width: 1px; height: 18px; background: var(--border-2); margin: 0 4px; flex-shrink: 0; }
 .color-select {
     background: var(--surface-2);
@@ -686,8 +715,6 @@ body {
     overflow: hidden;
     background: #0c0c0e;
 }
-.analysis-screen.hidden { display: none; }
-
 .analysis-toolbar {
     display: flex;
     align-items: center;
@@ -719,7 +746,6 @@ body {
     color: var(--text-sub);
     font-size: 13px;
 }
-.analysis-loading.hidden { display: none; }
 .analysis-loading:not(.hidden) ~ .analysis-grid,
 .analysis-loading:not(.hidden) ~ .results-table-wrap { display: none; }
 
@@ -732,70 +758,15 @@ body {
     color: var(--error);
     font-size: 12px;
 }
-.analysis-error.hidden { display: none; }
-
-/* ── Analysis grid: legend | scan panel | AOI cards ─ */
+/* ── Analysis grid: scan panel | AOI cards ─ */
 .analysis-grid {
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-columns: 320px minmax(0, 1fr) 320px;
     gap: 1px;
     background: var(--border);
     overflow: hidden;
-}
-
-.map-legend {
-    background: var(--surface);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-.legend-header {
-    padding: 10px 14px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .07em;
-    color: var(--text-sub);
-    border-bottom: 1px solid var(--border);
-}
-.legend-items {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-}
-.legend-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 6px;
-}
-.legend-item img {
-    width: 100%;
-    aspect-ratio: 1 / 1;
-    object-fit: cover;
-    border-radius: 4px;
-    display: block;
-    background: #000;
-}
-.legend-item span {
-    font-size: 10px;
-    color: var(--text);
-    text-align: center;
-    line-height: 1.2;
-}
-.legend-empty {
-    color: var(--text-sub);
-    font-size: 11px;
-    text-align: center;
-    padding: 16px 0;
 }
 
 /* ── Scan + overlay stage ───────────────────────── */
@@ -860,6 +831,134 @@ body {
     background: rgba(79,142,247,.14);
 }
 .overlay-toggle input { accent-color: var(--accent); }
+
+/* ── AI Insights panel (Gemini, left rail) ──────── */
+.insights-panel {
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.insights-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--text-sub);
+    border-bottom: 1px solid var(--border);
+}
+.insights-provider {
+    font-family: 'Menlo','Consolas',monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    background: rgba(79,142,247,.14);
+    border-radius: 999px;
+    padding: 1px 8px;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.insights-disclaimer {
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--text-dim);
+    padding: 8px 14px 0;
+}
+.insights-btn {
+    margin: 10px 14px 4px;
+    justify-content: center;
+}
+.insights-btn:disabled { opacity: .4; cursor: not-allowed; }
+.insights-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.insights-empty {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-style: italic;
+    padding: 8px 0;
+}
+.insights-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-sub);
+    padding: 8px 0;
+}
+.insights-loading .spinner { width: 16px; height: 16px; border-width: 2px; }
+.insights-error {
+    font-size: 11px;
+    color: var(--error);
+    border: 1px solid rgba(248,113,113,.4);
+    background: rgba(248,113,113,.08);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    line-height: 1.5;
+}
+.insight-headline {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.4;
+}
+.insight-sec { display: flex; flex-direction: column; gap: 2px; }
+.insight-sec-h {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-sub);
+}
+.insight-sec-b {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.5;
+}
+.insight-sec-b p { margin: 0 0 6px; }
+.insight-sec-b p:last-child { margin-bottom: 0; }
+.insight-sec-b ul,
+.insight-sec-b ol {
+    margin: 4px 0 6px;
+    padding-left: 18px;
+}
+.insight-sec-b ul { list-style: disc; }
+.insight-sec-b ol { list-style: decimal; }
+.insight-sec-b li { margin: 1px 0; }
+.insight-sec-b strong { font-weight: 700; }
+.insight-sec-b em { font-style: italic; }
+.insight-sec-b code,
+.insight-headline code {
+    font-family: 'Menlo','Consolas',monospace;
+    font-size: .9em;
+    background: rgba(127,127,150,.16);
+    padding: 0 4px;
+    border-radius: 4px;
+}
+.insight-disclaimer-foot {
+    margin-top: 2px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+    font-size: 10px;
+    font-style: italic;
+    color: var(--text-dim);
+    line-height: 1.5;
+}
+.insight-usage {
+    font-family: 'Menlo','Consolas',monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+}
 
 /* ── AOI cards panel ────────────────────────────── */
 .lesion-cards-panel {
@@ -954,15 +1053,6 @@ body {
     margin-top: 1px;
 }
 
-.mask-compare {
-    font-size: 11px;
-    color: var(--text-sub);
-    padding: 6px 8px;
-    border: 1px dashed var(--border-2);
-    border-radius: 4px;
-    background: var(--surface-2);
-}
-
 .lesion-card {
     --lesion-color: #7a7a90;
     border: 1px solid var(--border);
@@ -1023,15 +1113,99 @@ body {
     margin-left: 6px;
     font-style: italic;
 }
-.lesion-evidence {
-    list-style: disc inside;
-    font-size: 11px;
-    color: var(--text-sub);
-    line-height: 1.4;
+
+/* ── Curated key-metric rows ──────────────────────────────── */
+.metric-kv {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 7px 8px;
     margin: 0;
-    padding: 0;
+    font-size: 12px;
+}
+.metric-kv dt {
+    display: flex;
+    align-items: center;
+    color: var(--text-sub);
+}
+.metric-kv dd {
+    margin: 0;
+    color: var(--text);
+    font-weight: 600;
+}
+
+/* Small "i" affordance that reveals the high/low explanation tooltip */
+.tip-i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 13px;
+    height: 13px;
+    margin-left: 5px;
+    border: 1px solid var(--border-2);
+    border-radius: 50%;
+    font-size: 9px;
+    font-weight: 700;
+    font-style: normal;
+    line-height: 1;
+    color: var(--text-sub);
+    cursor: help;
+}
+.tip-i:hover,
+.tip-i:focus-visible {
+    color: var(--accent);
+    border-color: var(--accent);
+    outline: none;
+}
+[data-tip] { cursor: help; }
+
+/* ── Advanced metrics — collapsed by default ──────────────── */
+.advanced-metrics {
     border-top: 1px dashed var(--border);
-    padding-top: 7px;
+    padding-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.advanced-metrics > summary {
+    cursor: pointer;
+    list-style: none;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--text-dim);
+    user-select: none;
+}
+.advanced-metrics > summary::-webkit-details-marker { display: none; }
+.advanced-metrics > summary::before { content: '▸ '; }
+.advanced-metrics[open] > summary::before { content: '▾ '; }
+
+/* ── Floating metric tooltip ──────────────────────────────── */
+.tip-pop {
+    position: fixed;
+    z-index: 9999;
+    max-width: 260px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-2);
+    border-radius: 6px;
+    background: var(--surface);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+    font-size: 11px;
+    line-height: 1.45;
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity .12s;
+}
+.tip-pop.show { visibility: visible; opacity: 1; }
+.tip-pop-t { font-weight: 700; color: var(--text); margin-bottom: 3px; }
+.tip-pop-b { color: var(--text-sub); }
+.tip-pop-note {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--border);
+    color: var(--text-sub);
+    font-style: italic;
 }
 
 .pathology-malignant {
@@ -1090,21 +1264,28 @@ body {
 
 @media (max-width: 1080px) {
     .analysis-grid {
-        grid-template-columns: minmax(0, 1fr) 280px;
+        grid-template-columns: 280px minmax(0, 1fr) 280px;
     }
 }
 
-@media (max-width: 880px) {
+@media (max-width: 900px) {
     .upload-layout {
         grid-template-columns: 1fr;
         gap: 24px;
+    }
+
+    .intro-panel {
+        padding: 24px 22px;
     }
 
     .analysis-grid {
         grid-template-columns: 1fr;
         grid-auto-rows: auto;
     }
+    .scan-panel     { order: 1; min-height: 320px; }
+    .insights-panel { order: 2; max-height: 340px; }
     .lesion-cards-panel {
+        order: 3;
         max-height: 220px;
     }
 }

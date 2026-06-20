@@ -18,7 +18,7 @@ def _gradient_magnitude(img: np.ndarray) -> np.ndarray:
     return np.sqrt(gx ** 2 + gy ** 2)
 
 
-def _normalize_gradient(grad: np.ndarray, breast_mask: np.ndarray | None) -> np.ndarray:
+def normalize_gradient(grad: np.ndarray, breast_mask: np.ndarray | None) -> np.ndarray:
     """Scale gradient to [0,1] by a robust *breast-interior* ceiling.
 
     Min–max over the whole image is dominated by the skin/air edge, which is far
@@ -98,13 +98,21 @@ def _halo_widths(component: np.ndarray, img: np.ndarray, ray_count: int = 64, ma
 
 def compute_css(lesion: dict, geometry: dict, img: np.ndarray,
                 breast_mask: np.ndarray | None = None,
-                gradient: np.ndarray | None = None) -> dict:
-    """Crown Shyness metrics for one AOI candidate."""
+                gradient: np.ndarray | None = None,
+                grad_norm: np.ndarray | None = None) -> dict:
+    """Crown Shyness metrics for one AOI candidate.
+
+    ``grad_norm`` is the normalized gradient; it depends only on the per-image
+    ``gradient`` and ``breast_mask``, so the caller can compute it once and pass
+    it in to avoid repeating the work for every AOI. When omitted it is derived
+    here, preserving the standalone behavior.
+    """
     component = lesion["mask"].astype(bool)
     inner, outer, band = _ring_masks(component, BAND_RADIUS)
 
-    grad = gradient if gradient is not None else _gradient_magnitude(img)
-    grad_norm = _normalize_gradient(grad, breast_mask)
+    if grad_norm is None:
+        grad = gradient if gradient is not None else _gradient_magnitude(img)
+        grad_norm = normalize_gradient(grad, breast_mask)
 
     if band.any():
         gradient_sharpness = float(grad_norm[band].mean())

@@ -15,10 +15,12 @@ learning — by segmenting the dominant, locally-brighter central object (§7).
 
 > **Research / demonstration prototype only — not a clinical diagnostic tool.**
 
-There is **no AI / LLM / external API anywhere in the system.** Every output is a
-deterministic measurement computed locally; no text is generated and no data
-leaves the machine. (Earlier builds had an LLM "explanation" layer; it was
-removed in full.)
+The core viewer and analysis pipeline are **fully local and deterministic** — no
+network calls and no API key required. The single exception is an **optional "AI
+Insights" layer** (§14): when a free **Google Gemini Flash** key is configured, the
+analysis screen can send the rendered AOI image plus the measured profile to Gemini
+in one multimodal call and display a narrative report. It is **OFF by default**; with
+no key set, nothing ever leaves the machine.
 
 ---
 
@@ -57,8 +59,8 @@ removed in full.)
 2. **Viewer (second window)** — adjust WW/WL and transforms, then draw ROI
    annotations with the Box / Ellipse / Trace tools. "Start Analysis" runs the
    pipeline.
-3. **Analysis screen (third window)** — shows the map legend, the scan with
-   toggleable overlays, the AOI Panel, and an image-level results table.
+3. **Analysis screen (third window)** — shows the optional AI Insights panel, the
+   scan with toggleable overlays, the AOI Panel, and an image-level results table.
 
 ---
 
@@ -101,10 +103,15 @@ uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Then open `http://127.0.0.1:8000`. No environment configuration or API key is
-required — everything runs locally.
+required for the viewer and analysis pipeline — everything runs locally.
+
+To enable the optional **AI Insights** panel (§14), copy `.env.example` to `.env`
+and set `INSIGHTS_API_KEY` to a free Google Gemini key
+(<https://aistudio.google.com/apikey>). Leave it blank to keep the app fully local.
 
 **Dependencies** (`pyproject.toml`): `fastapi`, `uvicorn`, `python-multipart`,
-`pydicom`, `numpy`, `Pillow`, `scipy`. No LLM/provider SDKs are used.
+`pydicom`, `numpy`, `Pillow`, `scipy`, and `google-genai` (used only by the optional
+AI Insights layer).
 
 ---
 
@@ -119,6 +126,8 @@ required — everything runs locally.
 | GET  | `/api/demo/{name}` | Copy a demo (image+mask) into uploads | `{file_id, mask_file_id, metadata, ww, wl, mask_ww, mask_wl, label}` |
 | GET  | `/api/files/{file_id}/image?ww&wl` | Render a stored DICOM to PNG | `image/png` (no-store) |
 | POST | `/api/process/{file_id}?ww&wl` | Run the analysis pipeline (optional JSON body `{rois, image_width, image_height}` for ROI-guided detection) | analysis payload (§8) |
+| GET  | `/api/insights/status` | Whether the optional AI Insights layer is configured | `{enabled, provider, model, max_image_mb}` |
+| POST | `/api/insights/{file_id}` | Generate an AI narrative for an analyzed AOI — one multimodal Gemini call (body `{image_png_b64, profile}`) | `{report, model, provider, usage, cached}` or `503` |
 
 Uploaded files are written to `backend/uploads/` under a sanitized filename;
 `file_id` is that filename. Demo loading copies the demo image/mask into
@@ -352,6 +361,11 @@ Proceed button.
 - **ROI annotation** (see §10).
 
 ### 9.3 Analysis screen (the third window)
+- **AI Insights panel** (left): the optional Gemini-backed narrative report (§14). A
+  "Generate AI insights" button flattens the scan + overlay into one PNG, posts it
+  with the compact AOI profile, and renders the returned sections (headline, shape,
+  margin, risk, BI-RADS suggestion, follow-up, limitations + disclaimer). Shows a
+  clear "not configured" note when no key is set.
 - **Scan stage** (centre): the rendered scan with a vector overlay canvas.
   Toggles: Generated AOI mask, Bounding boxes, Crown Shyness halo, and **Doctor
   annotations**. The per-AOI vector overlay (halo + bbox) is focused on the
@@ -460,7 +474,201 @@ results table still reports the total AOI count and the image-level summary.
 
 ---
 
-## 14. Disclaimer
+## 14. AI Insights Report (implemented — Google Gemini Flash)
+
+> **Status: implemented.** An *optional, environment-gated* layer that is **OFF by
+> default**: with no key set there is no network call and the "runs fully local, no
+> API key required" guarantee (§4) holds. Setting `INSIGHTS_API_KEY` (or
+> `GEMINI_API_KEY`) auto-enables it. Built across `app/config.py`, `app/insights.py`,
+> and `app/routes.py` (`GET /api/insights/status`, `POST /api/insights/{file_id}`),
+> plus the analysis screen's left **AI Insights** panel. The provider is **Google
+> Gemini Flash** (`gemini-2.5-flash` by default) via the `google-genai` SDK.
+
+### 14.1 Goal & constraints
+Package what the analysis screen already has — the curated AOI Panel metrics (§11)
+**plus** a flattened *DICOM-render + generated-mask + outlines/bboxes + doctor-ROI*
+image — send it to a **free multimodal model in a single request**, and render the
+returned narrative report.
+
+Two constraints drive every decision below:
+- **One multimodal call** — the image and the structured JSON travel in the *same*
+  message; no multi-turn, no separate vision/text calls (token economy).
+- **The provider key stays server-side.** A key in `frontend/app.js` would be
+  world-readable, so the request is proxied through a new FastAPI route; the
+  browser never talks to the provider directly.
+
+### 14.2 Data flow
+```text
+ANALYSIS SCREEN (browser)
+ ├─ scanCanvas      (DICOM render, 512²)
+ ├─ overlayCanvas   (mask + outlines + bboxes + doctor ROIs, 512²)
+ │     └─ composite both → one flattened PNG → base64
+ └─ currentAnalysis.lesion_profile → compact JSON ("the package")
+            │  POST /api/insights/{file_id}   { image_png_b64, profile }
+            ▼
+BACKEND  app/insights.py
+   build_prompt(profile) + image
+        └─ ONE multimodal request ─────────────► free model (e.g. Gemini Flash)
+                                                 ◄─ JSON report
+   validate / parse → { report, model, usage, cached }
+            │  (optional) persist backend/aoi_logs/..._insights.json
+            ▼
+   FRONTEND renders report panel + disclaimer; caches by analysis hash
+```
+
+**Why composite client-side:** the analysis screen already draws the complete
+annotated view across `scanCanvas` + `overlayCanvas` (including
+`drawDoctorAnnotations`). Flattening those two same-origin canvases with
+`toDataURL()` is a few lines and is exactly WYSIWYG. Re-compositing on the backend
+with PIL would mean re-implementing every overlay and re-scaling ROI coordinates —
+avoid it.
+
+### 14.3 The package sent to the model
+A compact, de-duplicated subset of `lesion_profile` (rounded floats, no base64
+inside the JSON, no redundant keys), built in the frontend from data it already
+holds — **no pipeline re-run**:
+```jsonc
+{
+  "image_label": "P_00778 R MLO",
+  "detection": "Yes · compact mass",
+  "aoi_count": 3,
+  "displayed_aoi": {
+    "id": "aoi_1",
+    "shape": "Irregular",
+    "margin": "ILL_DEFINED-SPICULATED",
+    "margin_evidence": ["sharp radial protrusions (spicules)", "low gradient sharpness"],
+    "risk": { "label": "malignant", "confidence": 0.72 },
+    "geometry": { "area_pct": 3.2, "circularity": 0.42, "eccentricity": 0.61,
+                  "solidity": 0.63, "roughness": 0.55, "lobulation": 0.20,
+                  "spikes": 0.70, "convergence": 0.66 },
+    "crown_shyness": { "score": 0.31, "sharpness": 0.29, "halo_std": 0.40,
+                       "entropy": 0.70, "visibility": 0.55 }
+  },
+  "method_note": "Rule-based explainable demo classifier, not a trained model."
+}
+```
+
+### 14.4 The single call
+**Provider: Google Gemini Flash** via AI Studio — free tier, native multimodal
+endpoint (image + text in one request), generous free quotas, and a structured-output
+mode. The call uses the official **`google-genai`** SDK with `response_schema` set to
+the fixed `InsightReport` model below, so the response is valid JSON without manual
+parsing. The model id is config-only (`INSIGHTS_MODEL`, default `gemini-2.5-flash`),
+keeping the door open to other Gemini tiers if a paid upgrade is ever needed.
+
+The request carries one message with two parts: (1) the base64 image, (2) a system
+framing + the §14.3 package + the requested output schema. Output is requested as
+**fixed-schema JSON** so the frontend renders clean sections and `max_output_tokens`
+can be capped:
+```jsonc
+{
+  "headline": "…one-line gestalt…",
+  "detection_summary": "…",
+  "shape_assessment": "…ties the shape label to circularity / solidity / spikes…",
+  "margin_assessment": "…interprets the margin label + evidence…",
+  "risk_discussion": "…what raises / lowers suspicion here…",
+  "birads_suggestion": "e.g. 'BI-RADS 4 — suspicious', with one-line rationale, or N/A",
+  "recommended_followup": "…",
+  "limitations": "…",
+  "disclaimer": "Educational decision-support only; not a diagnosis."
+}
+```
+The prompt must hard-frame: role = *assist a radiologist*; inputs come from a
+*rule-based demo*; *never assert a definitive diagnosis*; *return only valid JSON*.
+
+### 14.5 Backend changes
+
+| File | Change |
+|---|---|
+| `app/config.py` *(new)* | A `Settings` object reading `INSIGHTS_ENABLED`, `INSIGHTS_PROVIDER`, `INSIGHTS_API_KEY` (falls back to `GEMINI_API_KEY`), `INSIGHTS_MODEL`, `INSIGHTS_MAX_IMAGE_MB`, seeded from a project-root `.env` by a tiny built-in parser (no `python-dotenv` dependency). Auto-enables when a key is present. |
+| `app/insights.py` *(new)* | `build_prompt(profile)`, the `InsightReport` Pydantic schema, and async `generate_insights(image_bytes, profile)` — one `google-genai` multimodal call (run in a worker thread) returning `{report, model, provider, usage}`. Raises `InsightsUnavailable` / `InsightsError` for the route to map to 503 / 502. |
+| `app/routes.py` | `GET /api/insights/status` and `POST /api/insights/{file_id}`: validate `{image_png_b64, profile}` (accepts a data-URL), enforce the size cap (413), return **503** when not configured, call `generate_insights`, and persist `..._insights.json` beside the AOI log. |
+| `pyproject.toml` / `uv.lock` | `google-genai` added via `uv add google-genai` (`httpx` ships with it). |
+
+**Caching:** the frontend caches the report on `currentAnalysis._insights` and only
+re-calls on an explicit **Regenerate**, so reopening the panel never silently repeats
+a call. Each generated report is also persisted to
+`backend/aoi_logs/..._insights.json`.
+
+### 14.6 Frontend changes (`index.html`, `app.js`, `styles.css`)
+- **Left "AI Insights" panel** added to the analysis grid (now a 3-column layout:
+  insights · scan · AOI cards), with a header, an always-visible disclaimer, a
+  **Generate AI insights** button, and a body that swaps between empty / loading /
+  error / report states.
+- `compositeAnalysisImage()` → temp 512² canvas, `drawImage(scanCanvas)` then
+  `drawImage(overlayCanvas)`, `toDataURL('image/png')` (PNG keeps spicules legible).
+- `buildInsightProfile(currentAnalysis)` → the §14.3 compact JSON (rounded floats).
+- **Call + states**: `fetchInsightsStatus()` on load disables the button with a
+  "not configured" note when no key is set; `generateInsights()` POSTs, shows a
+  spinner, renders the returned sections, and surfaces 503 / errors inline. Bad JSON
+  falls back to a headline + raw text from the backend.
+- **Disclaimer** is always shown above the report, alongside the model's own
+  disclaimer line and a token-usage footer.
+- **Client cache** on `currentAnalysis._insights`; the button becomes **Regenerate**,
+  and a fresh analysis is required to invalidate it.
+
+### 14.7 Token / cost minimization
+- One multimodal message (image + JSON together).
+- Downscale / compress the composite (512² already small; JPEG q≈0.85 cuts image
+  tokens — verify spicule legibility first).
+- Compact JSON (rounded floats, no redundant fields, no embedded base64).
+- Cap `max_output_tokens`; bounded fixed schema.
+- Cache by hash + explicit Regenerate (no silent repeats).
+- Surface the provider `usage` in the UI to watch consumption.
+
+### 14.8 Privacy, safety & compliance — read before shipping
+The largest non-code risk:
+- **Free AI tiers typically train on submitted data and offer no BAA.** Sending
+  real mammograms / DICOM metadata to a free endpoint is a PHI / HIPAA / GDPR
+  problem.
+- **Mitigation here:** restrict the feature to the **bundled demo / de-identified
+  public-dataset images**. Helpfully, the composite is built from `scanCanvas` +
+  `overlayCanvas` only — the corner overlays showing Patient Name/ID are HTML
+  `<div>`s, *not* on the canvas, so they are **not** transmitted (the raw breast
+  image still is).
+- **Gate** behind `INSIGHTS_ENABLED` (default off) with a one-time "this sends the
+  image to a third-party AI" consent notice; document that production / PHI use
+  requires a paid provider with a BAA or an on-prem model.
+- **Always-on disclaimer** in both prompt and UI: non-diagnostic, educational
+  decision-support only.
+
+### 14.9 Edge cases
+- No AOI detected → emit a "no suspicious mass found" report, or disable the button.
+- Missing key / `INSIGHTS_ENABLED=false` → 503 with a clear UI message.
+- Provider 429 / 5xx / timeout → friendly retry messaging; never hang the UI.
+- Non-JSON model output → fall back to a headline + raw text.
+- Oversized image → reject above `INSIGHTS_MAX_IMAGE_MB`.
+
+### 14.10 Configuration & API surface
+
+| Env var | Purpose | Default |
+| --- | --- | --- |
+| `INSIGHTS_API_KEY` | Provider key, server-side only (falls back to `GEMINI_API_KEY`) | _unset_ |
+| `INSIGHTS_ENABLED` | Force the feature on/off | auto: on when a key is present |
+| `INSIGHTS_PROVIDER` | Provider label | `gemini` |
+| `INSIGHTS_MODEL` | Model id | `gemini-2.5-flash` |
+| `INSIGHTS_MAX_IMAGE_MB` | Reject larger composites | `4` |
+
+Two endpoints: `GET /api/insights/status` → `{enabled, provider, model, max_image_mb}`;
+`POST /api/insights/{file_id}` takes `{image_png_b64, profile}` and returns
+`{report, model, provider, usage, cached}` (or `503` when not configured).
+
+### 14.11 Resolved decisions
+1. **Provider** — **Gemini Flash** (`gemini-2.5-flash`) via the `google-genai` SDK.
+2. **Output format** — **structured JSON sections** via the SDK `response_schema`.
+3. **Privacy gate** — **off by default**, auto-enabled only when a key is set, with an
+   always-visible disclaimer. Production / PHI use still needs a paid provider with a
+   BAA (see §14.8).
+4. **Report persistence** — both: persisted to `aoi_logs/..._insights.json` and cached
+   in-browser on `currentAnalysis._insights`.
+
+**Possible follow-ups:** unit tests mocking the SDK (prompt builder, JSON parser,
+503-without-key path); a backend hash-based cache to dedupe identical requests; a JPEG
+quality knob to further cut image tokens.
+
+---
+
+## 15. Disclaimer
 
 TerraComrad is a research and demonstration prototype. Its labels, scores, and
 "risk" outputs are heuristic and **must not be used for clinical diagnosis.**

@@ -4,6 +4,8 @@ import numpy as np
 from fastapi import HTTPException
 from PIL import Image
 
+from app.dicom_io import window_to_uint8
+
 
 ANALYSIS_SIZE = 512
 
@@ -33,12 +35,7 @@ def preprocess(ds, ww: float, wl: float) -> np.ndarray:
         pixels = pixels.astype(float)
         pixels = pixels * float(getattr(ds, "RescaleSlope", 1)) + float(getattr(ds, "RescaleIntercept", 0))
 
-    lo, hi = wl - ww / 2, wl + ww / 2
-    windowed = np.clip(pixels, lo, hi)
-    if hi > lo:
-        scaled = ((windowed - lo) / (hi - lo) * 255).astype(np.uint8)
-    else:
-        scaled = np.zeros_like(windowed, dtype=np.uint8)
+    scaled = window_to_uint8(pixels, ww, wl)
 
     if photometric == "MONOCHROME1":
         scaled = 255 - scaled

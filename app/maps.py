@@ -22,12 +22,10 @@ from PIL import Image
 from scipy import ndimage
 
 
+# Only the grayscale map is used (the generated mass mask via ``mask_png``);
+# the display "legend" colormaps were removed with their maps.
 _CMAPS: dict[str, np.ndarray] = {
-    "viridis": np.array([[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]], dtype=np.uint8),
-    "plasma":  np.array([[13, 8, 135], [126, 3, 168], [204, 71, 120], [248, 149, 64], [240, 249, 33]], dtype=np.uint8),
-    "inferno": np.array([[0, 0, 4], [66, 10, 104], [172, 44, 58], [252, 165, 60], [252, 255, 164]], dtype=np.uint8),
-    "magma":   np.array([[0, 0, 4], [80, 18, 123], [183, 55, 121], [251, 136, 97], [252, 253, 191]], dtype=np.uint8),
-    "gray":    np.array([[0, 0, 0], [255, 255, 255]], dtype=np.uint8),
+    "gray": np.array([[0, 0, 0], [255, 255, 255]], dtype=np.uint8),
 }
 
 

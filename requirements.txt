@@ -1,0 +1,11 @@
+# Runtime dependencies for TerraComrad (local pip + Vercel).
+# Mirrors pyproject.toml. For a reproducible build you can pin these to the exact
+# versions in uv.lock; the >= constraints below match what runs locally today.
+fastapi>=0.136.1
+uvicorn>=0.46.0
+python-multipart>=0.0.9
+pydicom>=2.4.0
+numpy>=1.24.0
+Pillow>=10.0.0
+scipy>=1.10.0
+google-genai>=2.9.0
