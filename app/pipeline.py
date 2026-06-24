@@ -119,22 +119,6 @@ def _no_lesion_profile(image_label: str, analysis_quality: dict | None = None) -
     }
 
 
-def _rank_lesion(lesion: dict) -> tuple:
-    """Risk ranking used to pick the image-level fields among multiple AOIs."""
-    margin = lesion["margin"]
-    shape = lesion["shape"]
-    pathology = lesion["pathology"]
-    css_score = lesion["crown_shyness"]["raw_score"]
-
-    pathology_score = 1 if pathology == "malignant" else 0
-    spiculated_margins = {"SPICULATED", "ILL_DEFINED-SPICULATED", "MICROLOBULATED-ILL_DEFINED-SPICULATED"}
-    margin_score = 1 if margin in spiculated_margins else 0
-    shape_score = 2 if shape == "Architectural_Distortion" else (1 if shape == "Irregular" else 0)
-
-    # Sort descending: larger tuple wins. CSS is inverted (lower = riskier).
-    return (pathology_score, margin_score, shape_score, -css_score)
-
-
 def _localization_quality(generated_mask: dict, roi_guided: bool) -> dict:
     """Quality gate that says how much to trust the localization.
 
@@ -237,17 +221,21 @@ def run_pipeline(
             "outline": _downsample_outline(candidate["contour"]),
         })
 
-    top = max(lesions_payload, key=_rank_lesion)
-    image_pathology = "malignant" if any(e["pathology"] == "malignant" for e in lesions_payload) else "benign"
+    # extract_lesions sorts candidates by area (desc), so lesions_payload[0] is the
+    # dominant mass. The crop is centred on one finding, so that largest AOI is the
+    # subject every surface describes — the headline fields below, aois[0], the
+    # logged displayed_aoi_id, and the frontend card. Keeping them all on this one
+    # lesion is what makes the payload internally consistent.
+    primary = lesions_payload[0]
 
     response["lesion_profile"] = {
         "image_label": image_label,
         "is_there_an_aoi": "Yes",
         "aoi_count": len(lesions_payload),
-        "aoi_shape": top["shape"],
-        "aoi_margin": top["margin"],
-        "pathology": image_pathology,
-        "confidence": top["confidence"],
+        "aoi_shape": primary["shape"],
+        "aoi_margin": primary["margin"],
+        "pathology": primary["pathology"],
+        "confidence": primary["confidence"],
         "pathology_source": "rule_based_demo",
         "localization_quality": analysis_quality["localization_quality"],
         "quality_flags": analysis_quality["quality_flags"],

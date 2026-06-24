@@ -15,13 +15,6 @@ def classify_shape(geom: dict) -> str:
     roughness = geom["contour_roughness"]
     lobulation = geom["lobulation_index"]
     spike = geom["radial_spike_index"]
-    asymmetry = geom.get("regional_asymmetry", 0.0)
-    has_compact_mass = geom.get("has_compact_mass", True)
-
-    if not has_compact_mass and spike > 0.65:
-        return "Architectural_Distortion"
-    if not has_compact_mass and asymmetry > 0.55:
-        return "Focal_Asymmetric_Density"
 
     # Rounded undulations (not spikes) over an otherwise solid body.
     if lobulation > 0.45 and solidity > 0.78 and spike < 0.5:
@@ -110,7 +103,7 @@ def classify_pathology(shape: str, margin: str, geom: dict, css: dict) -> tuple[
         score += 0.18
     if "OBSCURED" in margin:
         score += 0.10
-    if shape in {"Irregular", "Architectural_Distortion"}:
+    if shape == "Irregular":
         score += 0.18
     if convergence > 0.60:
         score += 0.12

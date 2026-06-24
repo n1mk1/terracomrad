@@ -483,9 +483,8 @@ function systemAoiCard(lesion, totalCount) {
     const conf = lesion.confidence != null ? `${(lesion.confidence * 100).toFixed(0)}%` : '—';
 
     // ── Curated verdicts ──
-    // The two "diffuse" shapes are the only non-compact findings the classifier emits.
-    const diffuse   = lesion.shape === 'Architectural_Distortion' || lesion.shape === 'Focal_Asymmetric_Density';
-    const detection = diffuse ? 'Yes · diffuse finding' : 'Yes · compact mass';
+    // The crop-centric pipeline always segments one compact central mass.
+    const detection = 'Yes · compact mass';
     const countText = `${totalCount} AOI${totalCount === 1 ? '' : 's'}`;
     // The per-lesion margin evidence becomes the "why" line inside the Margin tooltip.
     const evidence  = lesion.margin_evidence || [];
