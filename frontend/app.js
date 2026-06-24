@@ -420,6 +420,13 @@ function renderAnalysis(data) {
     renderLesionCards(data);
     preloadOverlayImages(data);
     drawScan();
+
+    // Unguided localization withholds morphology; don't let the AI narrate a
+    // (false) "no finding / negative" read — gate it behind drawing an ROI.
+    if (data.lesion_profile && data.lesion_profile.localization_quality === 'needs_roi'
+        && insightsConfigured !== false) {
+        reflectInsightsNeedsRoi();
+    }
 }
 
 function renderResultsTable(data) {
@@ -451,8 +458,17 @@ function renderLesionCards(data) {
         : '<div class="aoi-none">No ROI annotations were drawn in the viewer.</div>';
 
     // ── System analysis — largest AOI only ──
+    const lp = data.lesion_profile || {};
     let sysHtml;
-    if (!lesions.length) {
+    if (lp.localization_quality === 'needs_roi') {
+        // Unguided localization is unverifiable, so the backend withholds morphology.
+        // Make that the guardrail call-to-action — not a misleading "nothing found".
+        sysHtml = `<div class="aoi-needs-roi">
+            <span class="aoi-needs-roi-title">AI alone couldn't localize this</span>
+            <span class="aoi-needs-roi-body">${escapeHtml(lp.message
+                || 'Draw an ROI around the finding in the viewer, then re-analyze.')}</span>
+        </div>`;
+    } else if (!lesions.length) {
         sysHtml = '<div class="aoi-none">No AOI candidates detected by the system.</div>';
     } else {
         const largest = largestByArea(lesions);
@@ -1445,6 +1461,15 @@ function reflectInsightsDisabled() {
         '(<code>INSIGHTS_API_KEY</code>) to <code>.env</code> and restart the server.</div>';
 }
 
+function reflectInsightsNeedsRoi() {
+    btnGenInsights.disabled = true;
+    btnGenInsights.textContent = 'Generate AI insights';
+    btnGenInsights.title = 'Draw an ROI and re-analyze to enable AI insights';
+    insightsBody.innerHTML =
+        '<div class="insights-empty">Unguided detection didn\'t localize a finding, so there is nothing ' +
+        'reliable to narrate. Draw an ROI around the area of interest in the viewer, then re-analyze.</div>';
+}
+
 function resetInsights() {
     if (insightsConfigured === false) { reflectInsightsDisabled(); return; }
     btnGenInsights.disabled = false;
@@ -1512,6 +1537,8 @@ function buildInsightProfile(data) {
 
 async function generateInsights() {
     if (!currentAnalysis || insightsBusy) return;
+    if (currentAnalysis.lesion_profile
+        && currentAnalysis.lesion_profile.localization_quality === 'needs_roi') return;
     insightsBusy = true;
     btnGenInsights.disabled = true;
     insightsBody.innerHTML =

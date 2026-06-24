@@ -1030,6 +1030,18 @@ body {
     border: 1px dashed var(--border);
     border-radius: 4px;
 }
+.aoi-needs-roi {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: rgba(79, 142, 247, 0.08);
+}
+.aoi-needs-roi-title { font-size: 12px; font-weight: 700; color: var(--accent); }
+.aoi-needs-roi-body  { font-size: 11px; color: var(--text-sub); line-height: 1.5; }
+
 .aoi-subnote { font-size: 10px; color: var(--text-sub); }
 
 .doc-annot-list { display: flex; flex-direction: column; gap: 5px; }
