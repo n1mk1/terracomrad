@@ -50,10 +50,11 @@ backend/
   aoi_logs/          Per-analysis JSON logs
 
 pyproject.toml       uv / pip dependency spec
-requirements.txt     Flat pin list (used by Vercel)
+requirements.txt     Flat pin list (used by the Docker build)
 uv.lock              uv lockfile (local reproducibility)
 .env.example         Template for the optional AI Insights key
-.vercelignore        Files excluded from the Vercel build
+Dockerfile           Container image for production hosts
+.dockerignore        Files excluded from the Docker build context
 ```
 
 ## Run Locally
@@ -122,13 +123,39 @@ With no key set, `/api/insights/status` reports disabled and the panel shows a
 4. *(optional)* **Generate AI insights** — sends the flattened composite plus
    the compact profile to Gemini and renders a structured narrative report.
 
-## Deployment Notes
+## Deployment
 
-- Designed to deploy from the repository root so `app/`, `frontend/`, and
-  `backend/` ship together.
-- Production start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- `backend/demos/` must be included for the bundled demo cases to work.
-- `backend/uploads/` and `backend/aoi_logs/` are runtime scratch — not
-  persistent storage.
-- Set `INSIGHTS_API_KEY` (and any overrides) in the deployment environment to
-  enable the AI Insights layer in production.
+The app is a long-running uvicorn server that needs a **writable local disk**
+(it stores opened DICOMs under `backend/uploads/` and analysis logs under
+`backend/aoi_logs/`). That suits a container/VM host — Render, Railway, Fly.io,
+Cloud Run, or a plain VPS — not a read-only serverless platform.
+
+A `Dockerfile` is included; every host below builds from it.
+
+### Build and run locally
+
+```powershell
+docker build -t terracomrad .
+docker run --rm -p 8000:8000 terracomrad
+# add -e INSIGHTS_API_KEY=... to enable AI Insights
+```
+
+Then open <http://127.0.0.1:8000>.
+
+### Deploy to a host
+
+| Host | Steps |
+| --- | --- |
+| **Render** | New → Web Service → connect the repo → *Docker* runtime. Render injects `$PORT`; no extra config. |
+| **Railway** | New Project → Deploy from repo. The Dockerfile is auto-detected; `$PORT` is injected. |
+| **Fly.io** | `fly launch` (detects the Dockerfile) → set the service `internal_port` to `8000`. |
+
+Notes:
+
+- `backend/demos/` ships in the image so the bundled demo cases work.
+- `backend/uploads/` and `backend/aoi_logs/` are **ephemeral scratch** — fine
+  for demos, but they reset on every redeploy. Add a persistent volume (or
+  external storage) if you need uploads/logs to survive restarts.
+- Set `INSIGHTS_API_KEY` (and any overrides) as environment variables in the
+  host's dashboard to enable the AI Insights layer — never bake the key into the
+  image (`.env` is excluded from the build context).

@@ -1,0 +1,21 @@
+# Local env, tooling and caches — never needed in the image
+.venv/
+.uv-cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+.idea/
+.git/
+.gitignore
+.gitattributes
+.env
+.dockerignore
+Dockerfile
+
+# Dev-only / non-runtime artifacts
+uv.lock
+.vercelignore
+
+# Runtime-generated scratch (the app recreates these; never source)
+backend/uploads/*
+backend/aoi_logs/*
