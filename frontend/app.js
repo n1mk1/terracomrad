@@ -110,6 +110,16 @@ const annotBar      = document.getElementById('annotBar');
 const annotChips    = document.getElementById('annotChips');
 const annotHint     = document.getElementById('annotHint');
 
+/* ── Annotation note / label modal DOM ────────────────────── */
+const annotModal       = document.getElementById('annotModal');
+const annotModalTitle  = document.getElementById('annotModalTitle');
+const annotModalSub    = document.getElementById('annotModalSub');
+const annotModalInput  = document.getElementById('annotModalInput');
+const annotModalCount  = document.getElementById('annotModalCount');
+const annotModalSave   = document.getElementById('annotModalSave');
+const annotModalCancel = document.getElementById('annotModalCancel');
+const annotModalClose  = document.getElementById('annotModalClose');
+
 /* ── Mask colour filters ──────────────────────────────────── */
 const MASK_FILTER = {
     green:  'sepia(1) saturate(20) hue-rotate(85deg)',
@@ -1278,23 +1288,100 @@ function clearAnnots() {
     annotations = []; selectedAnnotId = null;
     renderAnnots(); renderAnnotChips(); updateAnnotButtons();
 }
-function renameAnnot(id) {
+/* ── Foreground text modal (replaces native window.prompt) ───
+   A single centered panel reused for both labelling and noting an
+   ROI. Returns a Promise that resolves to the entered string, or to
+   null if the doctor cancels (Esc, ✕, Cancel, or backdrop click). */
+let annotModalResolve = null;   // pending Promise resolver, or null when closed
+let annotModalMax     = 0;      // active char cap; 0 = uncapped (counter hidden)
+
+function openTextModal({ title, sub = '', value = '', maxLength = 0, placeholder = '', saveLabel = 'Save' }) {
+    // If another modal is somehow open, resolve it as a cancel first.
+    if (annotModalResolve) closeTextModal(null);
+
+    annotModalTitle.textContent = title;
+    annotModalSub.textContent   = sub;
+    annotModalSub.classList.toggle('hidden', !sub);
+    annotModalSave.textContent  = saveLabel;
+
+    annotModalMax = maxLength;
+    annotModalInput.value       = value;
+    annotModalInput.placeholder = placeholder;
+    if (maxLength > 0) annotModalInput.setAttribute('maxlength', maxLength);
+    else              annotModalInput.removeAttribute('maxlength');
+    updateModalCount();
+
+    annotModal.classList.remove('hidden');
+    // Focus + caret-to-end once the panel is on screen.
+    requestAnimationFrame(() => {
+        annotModalInput.focus();
+        const len = annotModalInput.value.length;
+        annotModalInput.setSelectionRange(len, len);
+    });
+
+    return new Promise(resolve => { annotModalResolve = resolve; });
+}
+
+function closeTextModal(result) {
+    if (!annotModalResolve) return;
+    const resolve = annotModalResolve;
+    annotModalResolve = null;
+    annotModal.classList.add('hidden');
+    resolve(result);
+}
+
+function updateModalCount() {
+    if (annotModalMax > 0) {
+        annotModalCount.textContent = `${annotModalInput.value.length} / ${annotModalMax}`;
+        annotModalCount.classList.remove('hidden');
+    } else {
+        annotModalCount.classList.add('hidden');
+    }
+}
+
+annotModalInput.addEventListener('input', updateModalCount);
+annotModalSave.addEventListener('click',   () => closeTextModal(annotModalInput.value));
+annotModalCancel.addEventListener('click', () => closeTextModal(null));
+annotModalClose.addEventListener('click',  () => closeTextModal(null));
+// Clicking the dimmed backdrop (but not the panel) cancels.
+annotModal.addEventListener('mousedown', e => { if (e.target === annotModal) closeTextModal(null); });
+// Enter saves (Shift+Enter = newline), Esc cancels. stopPropagation keeps the
+// global viewer keyhandler (Del/Esc on annotations) from also reacting.
+annotModalInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault(); e.stopPropagation();
+        closeTextModal(annotModalInput.value);
+    } else if (e.key === 'Escape') {
+        e.preventDefault(); e.stopPropagation();
+        closeTextModal(null);
+    }
+});
+
+async function renameAnnot(id) {
     const a = annotations.find(x => x.id === id);
     if (!a) return;
-    const v = window.prompt(`Label for ${a.id} (${a.type}):`, a.label || '');
+    const v = await openTextModal({
+        title:       'Label annotation',
+        sub:         `${a.id} · ${a.type}`,
+        value:       a.label || '',
+        placeholder: 'e.g. spiculated mass, upper-outer quadrant',
+    });
     if (v === null) return;
     a.label = v.trim();
     renderAnnots(); renderAnnotChips();
 }
 
 const ANNOT_NOTE_MAX = 100;   // doctor notes are short; capped here and server-side
-function noteAnnot(id) {
+async function noteAnnot(id) {
     const a = annotations.find(x => x.id === id);
     if (!a) return;
-    const v = window.prompt(
-        `Note for ${a.id} (${a.label || a.type}) — up to ${ANNOT_NOTE_MAX} characters:`,
-        a.note || ''
-    );
+    const v = await openTextModal({
+        title:       'Annotation note',
+        sub:         `${a.id} · ${a.label || a.type}`,
+        value:       a.note || '',
+        placeholder: 'Short clinical note for this region…',
+        maxLength:   ANNOT_NOTE_MAX,
+    });
     if (v === null) return;
     a.note = v.trim().slice(0, ANNOT_NOTE_MAX);
     renderAnnots(); renderAnnotChips();

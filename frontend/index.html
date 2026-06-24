@@ -351,6 +351,29 @@
 
         </main>
     </div>
+
+    <!-- ── Annotation note / label modal ───────────────────────
+         Centered foreground panel that replaces the browser's native
+         prompt() when a doctor labels or notes an ROI. -->
+    <div class="modal-backdrop hidden" id="annotModal">
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="annotModalTitle">
+            <div class="modal-header">
+                <span class="modal-title" id="annotModalTitle">Annotation note</span>
+                <button class="modal-close" id="annotModalClose" title="Close" aria-label="Close">×</button>
+            </div>
+            <p class="modal-sub" id="annotModalSub"></p>
+            <textarea class="modal-input" id="annotModalInput" rows="3"
+                      spellcheck="true" autocomplete="off"></textarea>
+            <div class="modal-foot">
+                <span class="modal-count hidden" id="annotModalCount"></span>
+                <div class="modal-actions">
+                    <button class="btn btn-sm btn-ghost"  id="annotModalCancel">Cancel</button>
+                    <button class="btn btn-sm btn-accent" id="annotModalSave">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/app.js"></script>
 </body>
 </html>

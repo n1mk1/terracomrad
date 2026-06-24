@@ -1236,6 +1236,86 @@ body {
     font-style: italic;
 }
 
+/* ── Annotation note / label modal ────────────────────────── */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;                /* above the floating tooltip (9999) */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, .55);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    animation: modal-fade .12s ease-out;
+}
+@keyframes modal-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.modal-panel {
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border-2);
+    border-radius: 8px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .55);
+    animation: modal-pop .14s ease-out;
+}
+@keyframes modal-pop {
+    from { opacity: 0; transform: translateY(6px) scale(.98); }
+    to   { opacity: 1; transform: none; }
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.modal-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.modal-close {
+    border: none;
+    background: transparent;
+    color: var(--text-sub);
+    font-size: 20px;
+    line-height: 1;
+    padding: 0 4px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.modal-close:hover { color: var(--text); background: var(--surface-2); }
+
+.modal-sub { margin-top: -2px; font-size: 11px; color: var(--text-sub); }
+
+.modal-input {
+    width: 100%;
+    min-height: 64px;
+    resize: vertical;
+    padding: 8px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.modal-input:focus { outline: none; border-color: var(--accent); }
+.modal-input::placeholder { color: var(--text-dim); }
+
+.modal-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.modal-count { font-size: 10px; color: var(--text-dim); }
+.modal-actions { display: flex; gap: 8px; margin-left: auto; }
+
 .pathology-malignant {
     background: rgba(251,113,133,.18);
     color: #fb7185;
