@@ -66,7 +66,7 @@ body {
     align-items: start;
 }
 
-/* ── Intro / typewriter panel ───────────────────── */
+/* ── Intro panel ────────────────────────────────── */
 .intro-panel {
     display: flex;
     flex-direction: column;
@@ -104,7 +104,15 @@ body {
     font-size: 14px;
     color: var(--text-sub);
     line-height: 1.85;
-    flex: 1;
+}
+
+.intro-disclaimer {
+    margin-top: 4px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text-dim);
 }
 
 .upload-main {
@@ -258,6 +266,14 @@ body {
     color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: .08em;
+}
+
+.demo-note {
+    max-width: 340px;
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--text-dim);
+    text-align: center;
 }
 
 .demo-grid {
