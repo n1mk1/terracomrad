@@ -23,5 +23,7 @@ COPY . .
 ENV PORT=8000
 EXPOSE 8000
 
-# Shell form so ${PORT} expands at runtime.
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT}
+# Exec form (JSON) with a shell so ${PORT} still expands; `exec` replaces the
+# shell with uvicorn so it runs as PID 1 and receives SIGTERM directly — a clean
+# graceful shutdown when the host redeploys, instead of a forced kill.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
