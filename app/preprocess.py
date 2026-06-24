@@ -1,10 +1,9 @@
 """Preprocessing: DICOM pixel array -> normalized 512x512 float32 analysis image."""
 
 import numpy as np
-from fastapi import HTTPException
 from PIL import Image
 
-from app.dicom_io import window_to_uint8
+from app.dicom_io import read_pixels, rescale_mono, window_to_uint8
 
 
 ANALYSIS_SIZE = 512
@@ -16,12 +15,7 @@ def preprocess(ds, ww: float, wl: float) -> np.ndarray:
     Steps follow the System Outline: load pixel array, reduce to grayscale,
     apply rescale + WW/WL, invert MONOCHROME1, resize to 512x512, normalize.
     """
-    try:
-        pixels = ds.pixel_array
-    except Exception as e:
-        raise HTTPException(422, f"Cannot read pixel data: {e}")
-
-    photometric = getattr(ds, "PhotometricInterpretation", "MONOCHROME2").strip()
+    pixels, photometric = read_pixels(ds)
 
     if photometric in ("RGB", "YBR_FULL", "YBR_FULL_422"):
         p = pixels.astype(float)
@@ -30,10 +24,7 @@ def preprocess(ds, ww: float, wl: float) -> np.ndarray:
         else:
             pixels = p.squeeze()
     else:
-        if pixels.ndim == 3:
-            pixels = pixels[0]
-        pixels = pixels.astype(float)
-        pixels = pixels * float(getattr(ds, "RescaleSlope", 1)) + float(getattr(ds, "RescaleIntercept", 0))
+        pixels = rescale_mono(ds, pixels)
 
     scaled = window_to_uint8(pixels, ww, wl)
 

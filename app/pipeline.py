@@ -190,7 +190,7 @@ def run_pipeline(
     roi_guided = roi_mask is not None and bool(roi_mask.any())
 
     relevance = compute_relevance(arrays, roi_mask=roi_mask)
-    binary_mask, _threshold, _method = threshold_and_clean(relevance, roi_mask=roi_mask)
+    binary_mask = threshold_and_clean(relevance, roi_mask=roi_mask)
 
     candidates = extract_lesions(binary_mask)
 
@@ -218,7 +218,7 @@ def run_pipeline(
     grad_norm = normalize_gradient(gradient, breast_mask)
     for candidate in candidates:
         geometry = compute_geometry(candidate, img, gradient)
-        css = compute_css(candidate, geometry, img, breast_mask, gradient, grad_norm=grad_norm)
+        css = compute_css(candidate, img, breast_mask, gradient, grad_norm=grad_norm)
         shape_label = classify_shape(geometry)
         margin_label, margin_evidence = classify_margin(geometry, css)
         pathology_label, confidence = classify_pathology(shape_label, margin_label, geometry, css)

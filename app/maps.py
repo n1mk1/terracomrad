@@ -22,27 +22,12 @@ from PIL import Image
 from scipy import ndimage
 
 
-# Only the grayscale map is used (the generated mass mask via ``mask_png``);
-# the display "legend" colormaps were removed with their maps.
-_CMAPS: dict[str, np.ndarray] = {
-    "gray": np.array([[0, 0, 0], [255, 255, 255]], dtype=np.uint8),
-}
-
-
-def _apply_cmap(arr: np.ndarray, name: str) -> np.ndarray:
-    colors = _CMAPS.get(name, _CMAPS["gray"]).astype(float)
-    n = len(colors)
-    idx = np.clip(arr * (n - 1), 0, n - 1)
-    lo = np.clip(idx.astype(int), 0, n - 2)
-    hi = lo + 1
-    t = (idx - lo)[..., np.newaxis]
-    return ((1 - t) * colors[lo] + t * colors[hi]).clip(0, 255).astype(np.uint8)
-
-
-def to_png_b64(arr: np.ndarray, cmap: str = "gray") -> str:
-    """Render a normalized array as a base64 PNG."""
-    rgb = _apply_cmap(arr, cmap)
-    pil = Image.fromarray(rgb, "RGB")
+# Only a grayscale render is needed now (the generated mass mask via
+# ``mask_png``); the display "legend" colormaps were removed with their maps.
+def to_png_b64(arr: np.ndarray) -> str:
+    """Render a normalized [0, 1] array as a base64 grayscale (RGB) PNG."""
+    gray = (np.clip(arr, 0.0, 1.0) * 255).astype(np.uint8)
+    pil = Image.fromarray(np.stack([gray, gray, gray], axis=-1), "RGB")
     buf = io.BytesIO()
     pil.save(buf, format="PNG", optimize=True)
     return base64.b64encode(buf.getvalue()).decode()

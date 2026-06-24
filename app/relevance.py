@@ -150,10 +150,8 @@ def _keep_central(mask: np.ndarray, cy: float, cx: float) -> np.ndarray:
 
 def threshold_and_clean(
     rel: np.ndarray,
-    method: str = "otsu",
-    percentile: float = 96.0,
     roi_mask: np.ndarray | None = None,
-) -> tuple[np.ndarray, float, str]:
+) -> np.ndarray:
     """Threshold the mass-likelihood map and clean it into one central mass mask.
 
     Unguided: the threshold is taken over the central region (where the cropped
@@ -162,7 +160,7 @@ def threshold_and_clean(
     threshold is taken over that region; if the refined mask collapses (a subtle
     finding the intensity cannot see) it falls back to the ROI shape itself.
 
-    Returns (binary_mask uint8, threshold_value, method_name).
+    Returns the binary mass mask (uint8).
     """
     h, w = rel.shape
     structure = np.ones((3, 3), dtype=int)
@@ -184,12 +182,7 @@ def threshold_and_clean(
     if vals.size == 0:
         vals = rel.ravel()
 
-    if method == "percentile":
-        threshold = float(np.percentile(vals, percentile)) if vals.size else 0.5
-        method_used = "percentile"
-    else:
-        threshold = _otsu_threshold(vals) if vals.size else 0.5
-        method_used = "roi_otsu" if roi_guided else "mass_otsu"
+    threshold = _otsu_threshold(vals) if vals.size else 0.5
 
     mask = rel >= threshold
     if search is not None:
@@ -206,14 +199,13 @@ def threshold_and_clean(
 
     if roi_guided and int(mask.sum()) < ROI_COLLAPSE_FRAC * int(roi_bool.sum()):
         mask = roi_bool
-        method_used = "roi_shape"
 
     if int(mask.sum()) < MIN_AREA_PX:
-        return np.zeros((h, w), dtype=np.uint8), float(threshold), method_used
+        return np.zeros((h, w), dtype=np.uint8)
 
-    return mask.astype(np.uint8), float(threshold), method_used
+    return mask.astype(np.uint8)
 
 
 def mask_png(mask: np.ndarray) -> str:
     """Render a binary mask as a base64 PNG (white-on-black)."""
-    return to_png_b64(mask.astype(float), "gray")
+    return to_png_b64(mask.astype(float))

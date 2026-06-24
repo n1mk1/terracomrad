@@ -75,22 +75,36 @@ def window_to_uint8(pixels: np.ndarray, ww: float, wl: float) -> np.ndarray:
     return ((clipped - lo) / (hi - lo) * 255).astype(np.uint8)
 
 
-def dicom_to_png(ds, ww: float | None, wl: float | None) -> io.BytesIO:
-    """Render a DICOM dataset as a PNG byte stream with the given window/level."""
+def read_pixels(ds) -> tuple[np.ndarray, str]:
+    """Raw pixel array + photometric interpretation, with a clean 422 on failure.
+
+    Shared by the viewer render and the analysis preprocessor so both read pixel
+    data and detect photometric interpretation the same way.
+    """
     try:
         pixels = ds.pixel_array
     except Exception as e:
         raise HTTPException(422, f"Cannot read pixel data: {e}")
-
     photometric = getattr(ds, "PhotometricInterpretation", "MONOCHROME2").strip()
+    return pixels, photometric
+
+
+def rescale_mono(ds, pixels: np.ndarray) -> np.ndarray:
+    """Monochrome plane as float with RescaleSlope/Intercept applied (3-D -> first frame)."""
+    if pixels.ndim == 3:
+        pixels = pixels[0]
+    pixels = pixels.astype(float)
+    return pixels * float(getattr(ds, "RescaleSlope", 1)) + float(getattr(ds, "RescaleIntercept", 0))
+
+
+def dicom_to_png(ds, ww: float | None, wl: float | None) -> io.BytesIO:
+    """Render a DICOM dataset as a PNG byte stream with the given window/level."""
+    pixels, photometric = read_pixels(ds)
 
     if photometric in ("RGB", "YBR_FULL", "YBR_FULL_422"):
         img = Image.fromarray(pixels.astype(np.uint8), "RGB")
     else:
-        if pixels.ndim == 3:
-            pixels = pixels[0]
-        pixels = pixels.astype(float)
-        pixels = pixels * float(getattr(ds, "RescaleSlope", 1)) + float(getattr(ds, "RescaleIntercept", 0))
+        pixels = rescale_mono(ds, pixels)
         if ww is None or wl is None:
             dw, dl = default_wwwl(ds)
             ww = ww if ww is not None else dw

@@ -96,7 +96,7 @@ def _halo_widths(component: np.ndarray, img: np.ndarray, ray_count: int = 64, ma
     return np.asarray(widths, dtype=float)
 
 
-def compute_css(lesion: dict, geometry: dict, img: np.ndarray,
+def compute_css(lesion: dict, img: np.ndarray,
                 breast_mask: np.ndarray | None = None,
                 gradient: np.ndarray | None = None,
                 grad_norm: np.ndarray | None = None) -> dict:
@@ -169,6 +169,4 @@ def compute_css(lesion: dict, geometry: dict, img: np.ndarray,
         "halo_width_std": round(halo_width_std, 4),
         "transition_zone_entropy": round(entropy_norm, 4),
         "boundary_visibility_ratio": round(visibility, 4),
-        # Reused from geometry so the margin classifier reads everything from css.
-        "radial_spike_index": float(geometry.get("radial_spike_index", 0.0)),
     }
