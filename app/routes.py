@@ -174,31 +174,17 @@ async def _read_roi_body(request: Request) -> tuple[list[dict] | None, tuple[flo
 
 
 @router.post("/api/process/{file_id}")
-async def process_dicom(
-    request: Request,
-    file_id: str,
-    ww: float | None = None,
-    wl: float | None = None,
-):
-    """Run the analysis pipeline. Returns the AOI profile + generated-mask preview."""
+async def process_dicom(request: Request, file_id: str):
+    """Run the analysis pipeline. Returns the AOI profile + generated-mask preview.
+
+    The analysis normalizes with the image's own default window, so it does not
+    depend on the viewer's WW/WL — the display window is a viewing preference, not
+    an analysis input. (Clients may still send ww/wl query params; they're ignored.)
+    """
     safe_name, ds = _read_dataset(file_id)
-
-    if ww is None or wl is None:
-        dw, dl = default_wwwl(ds)
-        ww = ww if ww is not None else dw
-        wl = wl if wl is not None else dl
-
     rois, image_size = await _read_roi_body(request)
 
-    result = await asyncio.to_thread(
-        run_pipeline,
-        ds,
-        float(ww),
-        float(wl),
-        safe_name,
-        rois,
-        image_size,
-    )
+    result = await asyncio.to_thread(run_pipeline, ds, safe_name, rois, image_size)
     result["aoi_log"] = _write_aoi_log(safe_name, result)
     return result
 

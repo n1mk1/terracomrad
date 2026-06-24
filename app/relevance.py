@@ -25,8 +25,10 @@ border margin keeps the mask off the frame edge (the padded crop never has the
 true mass running off the edge). When the clinician drew an ROI, the centre and
 search region come from that ROI instead of the frame centre.
 
-The constants below were tuned against the bundled demo masks (the radiologist
-ground truth), reaching ~0.82 Dice across the three cases.
+The constants below were tuned for hyper-zoomed lesion crops whose field of view
+matches the radiologist mask. On a whole-mammogram input the unguided centre prior
+has no single dominant mass to lock onto and localizes poorly — a doctor ROI is
+then required to focus detection (the ROI-guided path in ``threshold_and_clean``).
 """
 
 import numpy as np

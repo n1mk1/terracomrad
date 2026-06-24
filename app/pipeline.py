@@ -119,15 +119,45 @@ def _no_lesion_profile(image_label: str, analysis_quality: dict | None = None) -
     }
 
 
+def _needs_roi_profile(image_label: str, analysis_quality: dict) -> dict:
+    """Unguided localization can't be trusted, so withhold morphology and ask for
+    an ROI.
+
+    The generated mask is still returned on the response, so the overlay shows
+    *what* the unguided pass grabbed — usually the breast centre — which is the
+    point: it shows the viewer why a clinician ROI is needed.
+    """
+    return {
+        "image_label": image_label,
+        "is_there_an_aoi": "Draw an ROI",
+        "aoi_count": 0,
+        "aoi_shape": "N/A",
+        "aoi_margin": "N/A",
+        "pathology": "N/A",
+        "confidence": None,
+        "pathology_source": "not_available",
+        "localization_quality": analysis_quality["localization_quality"],
+        "quality_flags": analysis_quality["quality_flags"],
+        "aois": [],
+        "message": (
+            "Unguided detection can't confirm it found the real finding — without an "
+            "ROI it tends to grab the breast centre. Draw an ROI around the area of "
+            "interest and re-analyze to get shape, margin, and risk."
+        ),
+    }
+
+
 def _localization_quality(generated_mask: dict, roi_guided: bool) -> dict:
     """Quality gate that says how much to trust the localization.
 
-    The cropped mass should be a large central blob, so the gate keys on the
-    generated-mask area as a fraction of the **frame**. A plausible result sits
-    between ``MIN_MASS_FRAC`` and ``MAX_MASS_FRAC``; outside that range the central
-    object was missed (under-segmented), or the threshold flooded the crop
-    (over-segmented). ``roi_guided`` means a clinician bounded the finding, so it
-    is trusted.
+    The only signal that reliably separates a good localization from a bad one is
+    whether a clinician bounded the finding with an ROI. No image-content heuristic
+    distinguishes a true centred mass from the breast centre the prior grabs on a
+    whole-mammogram input — intensity, breast coverage, and top-hat elevation all
+    overlap, and a subtle real lesion can score *lower* than a false grab. So an
+    unguided localization is never trusted on its own: it is surfaced as
+    ``needs_roi`` and the pipeline withholds confident morphology until a clinician
+    draws an ROI. The area sub-checks are kept only as diagnostic flags.
     """
     area_pct = float(generated_mask.get("area_pct", 0.0))
     frame_frac = area_pct / 100.0
@@ -135,35 +165,29 @@ def _localization_quality(generated_mask: dict, roi_guided: bool) -> dict:
 
     if area_pct <= 0.0 or int(generated_mask.get("area_px", 0)) == 0:
         flags.append("no_mass_localized")
-        status = "failed_no_mass"
-    elif roi_guided:
-        status = "clinician_guided"
-    elif frame_frac > MAX_MASS_FRAC:
+        return {"localization_quality": "failed_no_mass", "quality_flags": flags, "roi_guided": roi_guided}
+
+    if roi_guided:
+        return {"localization_quality": "clinician_guided", "quality_flags": flags, "roi_guided": True}
+
+    # Unguided with a mask: note why it looks shaky, but it is unverifiable either
+    # way, so the headline outcome is "draw an ROI".
+    if frame_frac > MAX_MASS_FRAC:
         flags.append("over_segmented_mask")
-        status = "failed_broad_mask"
     elif frame_frac < MIN_MASS_FRAC:
         flags.append("under_segmented_mask")
-        status = "low_confidence_small"
-    else:
-        status = "acceptable_heuristic"
-
-    return {
-        "localization_quality": status,
-        "quality_flags": flags,
-        "roi_guided": roi_guided,
-    }
+    flags.append("unverified_no_roi")
+    return {"localization_quality": "needs_roi", "quality_flags": flags, "roi_guided": False}
 
 
 def run_pipeline(
     ds,
-    ww: float,
-    wl: float,
     image_label: str,
     rois: list[dict] | None = None,
     image_size: tuple[float, float] | None = None,
 ) -> dict:
     """Execute the analysis pipeline and return the response payload."""
-    img = preprocess(ds, ww, wl)
+    img = preprocess(ds)
     arrays = compute_maps(img)
     breast_mask = arrays["breast_mask"]
     gradient = arrays["gradient"]
@@ -191,6 +215,12 @@ def run_pipeline(
     analysis_quality = _localization_quality(response["generated_mask"], roi_guided)
     response["analysis_quality"] = analysis_quality
     response["doctor_annotations"] = _summarize_annotations(rois)
+
+    # Unguided localization is unverifiable, so withhold confident morphology and
+    # ask for an ROI — even though a (likely wrong) mask was segmented.
+    if analysis_quality["localization_quality"] == "needs_roi":
+        response["lesion_profile"] = _needs_roi_profile(image_label, analysis_quality)
+        return response
 
     if not candidates:
         response["lesion_profile"] = _no_lesion_profile(image_label, analysis_quality)

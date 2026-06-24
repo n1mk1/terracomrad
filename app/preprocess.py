@@ -3,19 +3,26 @@
 import numpy as np
 from PIL import Image
 
-from app.dicom_io import read_pixels, rescale_mono, window_to_uint8
+from app.dicom_io import default_wwwl, read_pixels, rescale_mono, window_to_uint8
 
 
 ANALYSIS_SIZE = 512
 
 
-def preprocess(ds, ww: float, wl: float) -> np.ndarray:
+def preprocess(ds) -> np.ndarray:
     """Produce the normalized analysis image used by every downstream module.
 
-    Steps follow the System Outline: load pixel array, reduce to grayscale,
-    apply rescale + WW/WL, invert MONOCHROME1, resize to 512x512, normalize.
+    Steps: load pixel array, reduce to grayscale, apply rescale + windowing,
+    invert MONOCHROME1, resize to 512x512, normalize.
+
+    The window comes from the image's own default (stored WW/WL, or a min/max
+    fallback) — never the live viewer window. The analysis must be reproducible:
+    dragging W/L in the viewer changes only what the radiologist sees, not the
+    segmentation or the measured features. The interactive window is applied by
+    the viewer render in ``dicom_io.dicom_to_png``, which is a separate path.
     """
     pixels, photometric = read_pixels(ds)
+    ww, wl = default_wwwl(ds)
 
     if photometric in ("RGB", "YBR_FULL", "YBR_FULL_422"):
         p = pixels.astype(float)
