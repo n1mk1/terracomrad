@@ -4,6 +4,7 @@
 __pycache__/
 *.py[cod]
 .idea/
+.claude/
 .env
 
 # Runtime data. Demo DICOMs live in backend/demos and are intentionally kept.

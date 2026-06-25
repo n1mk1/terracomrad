@@ -55,6 +55,13 @@ class Settings:
         except ValueError:
             self.max_image_mb = 4.0
 
+        # Per-IP cap on the cost-bearing insights endpoint (calls/minute). 0
+        # disables the limiter. Defends a configured key from quota/billing abuse.
+        try:
+            self.rate_limit_per_min = int(os.getenv("INSIGHTS_RATE_LIMIT_PER_MIN", "15"))
+        except ValueError:
+            self.rate_limit_per_min = 15
+
         # Off by default only when no key exists, so the "runs fully local, no key
         # required" guarantee holds out of the box. A present key auto-enables the
         # feature; INSIGHTS_ENABLED can force it on or off explicitly.

@@ -1185,6 +1185,10 @@ function annotEnd() {
     renderAnnots();
     renderAnnotChips();
     updateAnnotButtons();
+
+    // Prompt for a clinical note the moment the shape is committed, so the
+    // doctor isn't forced to hunt for the 📝 button after every draw.
+    noteAnnot(d.id);
 }
 
 /* ── SVG rendering ────────────────────────────────────────── */
@@ -1650,7 +1654,10 @@ async function generateInsights() {
         renderInsights(out);
     } catch (err) {
         insightsBody.innerHTML =
-            `<div class="insights-error">AI insights failed: ${escapeHtml(err.message)}</div>`;
+            `<div class="insights-error">AI insights failed: ${escapeHtml(err.message)}`
+            + `<div class="insights-error-hint">Click <strong>Try again</strong> below to regenerate — `
+            + `your annotations and analysis are kept.</div>`
+            + `</div>`;
         btnGenInsights.textContent = 'Try again';
     } finally {
         insightsBusy = false;

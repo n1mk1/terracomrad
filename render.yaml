@@ -1,0 +1,37 @@
+# Render Blueprint for TerraComrad.
+# Deploy: Render dashboard → New → Blueprint → connect this repo → Apply.
+# Spec: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: terracomrad
+    runtime: docker            # builds from ./Dockerfile; Render injects $PORT
+    plan: starter              # NOT free: free instances spin down after 15 min
+                               # (≈50s cold start) and are RAM-tight when rendering
+                               # the full-res demo masks. Starter avoids both.
+    healthCheckPath: /healthz
+    autoDeploy: false          # research demo: redeploy on demand, not on every push
+
+    envVars:
+      # Gemini key for the optional AI Insights panel. sync:false = set the value in
+      # the Render dashboard, never in git. Leave it unset to run fully local with
+      # the panel disabled (the rest of the app needs no configuration).
+      - key: INSIGHTS_API_KEY
+        sync: false
+      - key: ENABLE_DOCS
+        value: "false"
+      # Optional overrides — defaults are fine for a small demo. Uncomment to change:
+      # - key: MAX_UPLOAD_MB                  # default 80
+      #   value: "40"
+      # - key: SCRATCH_TTL_HOURS             # default 24 (0 = keep forever)
+      #   value: "24"
+      # - key: INSIGHTS_RATE_LIMIT_PER_MIN   # default 15 per IP (0 = unlimited)
+      #   value: "15"
+
+    # Persist the per-analysis research logs (backend/aoi_logs) across redeploys.
+    # Mounted at the logs path ONLY, so it does not shadow the baked-in backend/demos
+    # (uploads stay ephemeral, which is fine). Remove this whole block if you don't
+    # need to keep the logs — a disk requires a paid plan and bills ~$0.25/GB/month.
+    disk:
+      name: aoi-logs
+      mountPath: /app/backend/aoi_logs
+      sizeGB: 1

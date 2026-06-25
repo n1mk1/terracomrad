@@ -16,9 +16,26 @@ from app.dicom_io import default_wwwl, dicom_to_png, extract_meta
 from app.insights import InsightsError, InsightsUnavailable, generate_insights
 from app.paths import AOI_LOG_DIR
 from app.pipeline import run_pipeline
-from app.storage import DEMOS, UPLOAD_DIR, safe_filename
+from app.ratelimit import SlidingWindowLimiter, client_ip
+from app.storage import (
+    DEMOS,
+    MAX_UPLOAD_MB,
+    UPLOAD_DIR,
+    maybe_prune,
+    safe_filename,
+    unique_upload_name,
+)
 
 router = APIRouter()
+
+# Per-IP guard on the one endpoint that spends money/quota (AI insights).
+_insights_limiter = SlidingWindowLimiter(insights_settings.rate_limit_per_min, 60.0)
+
+
+@router.get("/healthz")
+async def healthz():
+    """Liveness probe for the host's health checks."""
+    return {"ok": True}
 
 
 def _read_dataset(file_id: str):
@@ -87,27 +104,44 @@ def _write_insights_log(file_id: str, profile: dict, result: dict) -> None:
     log_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
+async def _read_capped(file: UploadFile) -> bytes:
+    """Read an upload in 1 MB chunks, refusing anything past the size cap.
+
+    Reading incrementally means an oversized (or malicious) upload is rejected
+    with a 413 instead of being loaded whole into memory.
+    """
+    max_bytes = int(MAX_UPLOAD_MB * 1024 * 1024)
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(413, f"File exceeds {MAX_UPLOAD_MB:g} MB upload limit")
+        chunks.append(chunk)
+    if total == 0:
+        raise HTTPException(400, "Empty upload")
+    return b"".join(chunks)
+
+
 @router.post("/api/upload")
 async def upload_dicom(file: UploadFile = File(...)):
-    content = await file.read()
+    content = await _read_capped(file)
     try:
         ds = pydicom.dcmread(io.BytesIO(content))
     except Exception as e:
         raise HTTPException(400, f"Not a valid DICOM file: {e}")
 
-    safe_name = safe_filename(file.filename or "unnamed.dcm")
+    # Unique per upload so two users (or two files that share a name) never
+    # collide on disk — otherwise one overwrites the other and could read it back.
+    safe_name = unique_upload_name(file.filename or "unnamed.dcm")
     (UPLOAD_DIR / safe_name).write_bytes(content)
+    maybe_prune()
 
     ww, wl = default_wwwl(ds)
     return {"file_id": safe_name, "metadata": extract_meta(ds), "ww": ww, "wl": wl}
-
-
-@router.get("/api/demos")
-async def list_demos():
-    return [
-        {"id": k, "label": v["label"], "description": v["description"]}
-        for k, v in DEMOS.items()
-    ]
 
 
 @router.get("/api/demo/{name}")
@@ -132,6 +166,7 @@ async def load_demo(name: str):
     ds_mask = pydicom.dcmread(str(demo["mask"]))
     mww, mwl = default_wwwl(ds_mask)
 
+    maybe_prune()
     return {
         "file_id":      img_name,
         "mask_file_id": mask_name,
@@ -145,7 +180,9 @@ async def load_demo(name: str):
 @router.get("/api/files/{file_id}/image")
 async def render_image(file_id: str, ww: float | None = None, wl: float | None = None):
     _, ds = _read_dataset(file_id)
-    buf = dicom_to_png(ds, ww, wl)
+    # Pixel decode + PNG encode is CPU-bound; off-load it so one render can't
+    # stall the event loop for every other in-flight request.
+    buf = await asyncio.to_thread(dicom_to_png, ds, ww, wl)
     return StreamingResponse(buf, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
@@ -181,6 +218,7 @@ async def process_dicom(request: Request, file_id: str):
     depend on the viewer's WW/WL — the display window is a viewing preference, not
     an analysis input. (Clients may still send ww/wl query params; they're ignored.)
     """
+    maybe_prune()
     safe_name, ds = _read_dataset(file_id)
     rois, image_size = await _read_roi_body(request)
 
@@ -213,6 +251,11 @@ async def insights(file_id: str, request: Request):
         raise HTTPException(
             503,
             "AI insights are not configured. Set INSIGHTS_API_KEY (or GEMINI_API_KEY) in .env.",
+        )
+
+    if not _insights_limiter.allow(client_ip(request)):
+        raise HTTPException(
+            429, "Too many AI-insight requests — please wait a minute and try again."
         )
 
     try:

@@ -38,6 +38,7 @@ app/                 FastAPI backend
   relevance.py       Spatial relevance maps
   config.py          Env-driven settings for the AI Insights layer
   insights.py        Gemini multimodal call + response schema
+  ratelimit.py       In-process per-IP limiter for the insights endpoint
 
 frontend/            Single-page UI (no build step)
   index.html
@@ -96,6 +97,10 @@ Optional overrides (see `.env.example` for the full list):
 | `INSIGHTS_MODEL` | `gemini-2.5-flash` | Model id |
 | `INSIGHTS_ENABLED` | auto | Force the feature on/off |
 | `INSIGHTS_MAX_IMAGE_MB` | `4` | Reject larger composites |
+| `INSIGHTS_RATE_LIMIT_PER_MIN` | `15` | Per-IP cap on AI-insight calls (`0` = unlimited) |
+| `MAX_UPLOAD_MB` | `80` | Reject larger DICOM uploads |
+| `SCRATCH_TTL_HOURS` | `24` | Auto-delete uploads/logs older than this (`0` = keep forever) |
+| `ENABLE_DOCS` | `false` | Expose `/docs`, `/redoc`, `/openapi.json` when true |
 
 With no key set, `/api/insights/status` reports disabled and the panel shows a
 "not configured" message.
@@ -104,8 +109,8 @@ With no key set, `/api/insights/status` reports disabled and the panel shows a
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
+| `GET` | `/healthz` | Liveness probe (`{"ok": true}`) |
 | `POST` | `/api/upload` | Upload a DICOM file |
-| `GET` | `/api/demos` | List the bundled demo cases |
 | `GET` | `/api/demo/{name}` | Copy a bundled demo into uploads |
 | `GET` | `/api/files/{file_id}/image?ww&wl` | Render a stored DICOM to PNG |
 | `POST` | `/api/process/{file_id}?ww&wl` | Run the analysis pipeline (optional JSON body for ROI-guided detection) |
@@ -155,7 +160,15 @@ Notes:
 - `backend/demos/` ships in the image so the bundled demo cases work.
 - `backend/uploads/` and `backend/aoi_logs/` are **ephemeral scratch** — fine
   for demos, but they reset on every redeploy. Add a persistent volume (or
-  external storage) if you need uploads/logs to survive restarts.
+  external storage) if you need uploads/logs to survive restarts. Each upload
+  gets a unique on-disk name (no cross-user collisions), and files older than
+  `SCRATCH_TTL_HOURS` are pruned automatically so a long-lived instance can't
+  fill its disk.
+- The AI-insights endpoint is rate-limited per IP (`INSIGHTS_RATE_LIMIT_PER_MIN`)
+  to protect a configured key's quota/billing. Behind a proxy the limiter reads
+  `X-Forwarded-For`; with multiple workers the limit is per-worker.
+- Interactive API docs (`/docs`) are **off by default**; set `ENABLE_DOCS=true`
+  to expose them (handy for local development).
 - Set `INSIGHTS_API_KEY` (and any overrides) as environment variables in the
   host's dashboard to enable the AI Insights layer — never bake the key into the
   image (`.env` is excluded from the build context).

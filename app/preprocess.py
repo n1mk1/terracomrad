@@ -27,6 +27,9 @@ def preprocess(ds) -> np.ndarray:
     if photometric in ("RGB", "YBR_FULL", "YBR_FULL_422"):
         p = pixels.astype(float)
         if p.ndim == 3:
+            # ITU-R BT.601 luma coefficients (0.299, 0.587, 0.114; sum to 1.0) ->
+            # perceptual grayscale. Mammograms are virtually always monochrome, so
+            # this branch is a safety net for colour-encoded inputs.
             pixels = 0.299 * p[:, :, 0] + 0.587 * p[:, :, 1] + 0.114 * p[:, :, 2]
         else:
             pixels = p.squeeze()
@@ -38,5 +41,7 @@ def preprocess(ds) -> np.ndarray:
     if photometric == "MONOCHROME1":
         scaled = 255 - scaled
 
+    # Lanczos (windowed-sinc) resampling preserves edges and fine boundary
+    # structure better than bilinear when rescaling to the fixed 512^2 grid.
     pil = Image.fromarray(scaled, "L").resize((ANALYSIS_SIZE, ANALYSIS_SIZE), Image.LANCZOS)
     return np.array(pil).astype(np.float32) / 255.0

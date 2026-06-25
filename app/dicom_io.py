@@ -62,11 +62,14 @@ def default_wwwl(ds) -> tuple[float, float]:
 
 
 def window_to_uint8(pixels: np.ndarray, ww: float, wl: float) -> np.ndarray:
-    """Clip a float pixel array to the WW/WL window and scale to uint8 [0,255].
+    """Apply the DICOM VOI LUT (window width/center) and scale to uint8 [0,255].
 
-    Shared by the viewer render (``dicom_to_png``) and the analysis preprocessor
-    so both apply identical windowing. A degenerate window (hi <= lo) maps to all
-    zeros, matching the prior behavior in both call sites.
+    Implements the linear VOI LUT of the DICOM standard (PS3.3 C.11.2): clip to
+    [wl - ww/2, wl + ww/2] then map linearly to 0..255. Runs AFTER the modality
+    LUT (RescaleSlope/Intercept, applied in rescale_mono). Shared by the viewer
+    render (``dicom_to_png``) and the analysis preprocessor so both apply identical
+    windowing. A degenerate window (hi <= lo) maps to all zeros, matching the prior
+    behavior in both call sites.
     """
     lo, hi = wl - ww / 2.0, wl + ww / 2.0
     if hi <= lo:
@@ -90,7 +93,10 @@ def read_pixels(ds) -> tuple[np.ndarray, str]:
 
 
 def rescale_mono(ds, pixels: np.ndarray) -> np.ndarray:
-    """Monochrome plane as float with RescaleSlope/Intercept applied (3-D -> first frame)."""
+    """Apply the DICOM modality LUT: stored pixels -> output units via
+    RescaleSlope/Intercept (PS3.3 C.11.1). Monochrome plane as float (3-D -> first
+    frame). Precedes the VOI/windowing step done in window_to_uint8.
+    """
     if pixels.ndim == 3:
         pixels = pixels[0]
     pixels = pixels.astype(float)

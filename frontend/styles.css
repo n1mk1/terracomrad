@@ -922,6 +922,11 @@ body {
     padding: 8px 10px;
     line-height: 1.5;
 }
+.insights-error-hint {
+    margin-top: 6px;
+    color: var(--text-sub);
+}
+.insights-error-hint strong { color: var(--text); }
 .insight-headline {
     font-size: 13px;
     font-weight: 700;

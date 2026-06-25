@@ -5,6 +5,17 @@ documented threshold over a feature with a clear physical meaning, so a label ca
 always be traced back to the measurements that produced it (the margin classifier
 returns that trace as an evidence list). Thresholds are deliberately conservative
 — this is a demonstration heuristic, not a trained classifier.
+
+Vocabulary and risk direction follow the ACR BI-RADS mammography lexicon: mass
+SHAPE (round / oval / lobulated / irregular) and MARGIN (circumscribed /
+microlobulated / obscured / indistinct[="ill-defined"] / spiculated). The compound
+margin strings (e.g. MICROLOBULATED-ILL_DEFINED-SPICULATED) are intentional -- they
+mirror the CBIS-DDSM ground-truth encoding the companion study prompts against, not
+a bug. The pathology weighting reflects the published BI-RADS malignancy
+associations: spiculated margins (~86% positive predictive value) and irregular
+shape (~62% PPV) raise suspicion, while circumscribed margins (~90% negative
+predictive value) and round/oval shape (~84% NPV) lower it. The exact numeric
+weights in classify_pathology are hand-set for the demo, NOT fitted to outcomes.
 """
 
 

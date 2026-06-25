@@ -1,11 +1,21 @@
-# Runtime dependencies for TerraComrad (local pip + Vercel).
-# Mirrors pyproject.toml. For a reproducible build you can pin these to the exact
-# versions in uv.lock; the >= constraints below match what runs locally today.
-fastapi>=0.136.1
-uvicorn>=0.46.0
-python-multipart>=0.0.9
-pydicom>=2.4.0
-numpy>=1.24.0
-Pillow>=10.0.0
-scipy>=1.10.0
-google-genai>=2.9.0
+# Runtime dependencies for TerraComrad (local pip/uv + Docker).
+# Pinned to the exact versions validated locally and resolved in uv.lock, so a
+# rebuild on Render weeks from now installs the same code that runs today.
+# numpy/scipy are held at the 3.10-compatible line (2.2.x / 1.15.x) so a local
+# `pip install` on Python 3.10 still works; both also ship cp312 manylinux wheels,
+# so the Python 3.12 Docker build stays wheel-only (no compiler needed).
+fastapi==0.136.1
+uvicorn==0.46.0
+python-multipart==0.0.27
+pydicom==3.0.2
+numpy==2.2.6
+Pillow==12.2.0
+scipy==1.15.3
+google-genai==2.9.0
+
+# DICOM pixel decoder — lets users upload *compressed* mammograms (JPEG 2000 /
+# JPEG-LS / JPEG baseline). Without it, pydicom only reads uncompressed DICOMs and
+# compressed uploads fail with "unsupported transfer syntax". The bundled demos are
+# uncompressed, so this is only needed once people upload their own files. One
+# binary wheel, covers all common transfer syntaxes — no system libraries required.
+python-gdcm==3.2.6

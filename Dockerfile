@@ -11,8 +11,9 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Install dependencies first so this layer is cached across code changes.
-# numpy / scipy / Pillow / pydicom all ship manylinux wheels, so no system
-# build toolchain is needed on python:slim.
+# numpy / scipy / Pillow / pydicom and the python-gdcm decoder all ship manylinux
+# wheels, so no system build toolchain is needed on python:slim. python-gdcm is
+# what lets the app decode compressed DICOM uploads (JPEG 2000 / JPEG-LS / JPEG).
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 import re
 
 from pydantic import BaseModel
@@ -128,46 +129,82 @@ def _usage(response) -> dict:
     }
 
 
+# Provider HTTP status codes worth retrying: the model is momentarily overloaded
+# (503), rate-limited (429), or hit a transient server fault (500/504). Google's
+# own guidance for these is "try again later", so we back off and do exactly that.
+_RETRYABLE_CODES = frozenset({429, 500, 503, 504})
+_MAX_ATTEMPTS = 4           # one initial call + up to three retries
+_BACKOFF_BASE = 1.0         # seconds; doubles each retry (1s, 2s, 4s) plus jitter
+
+
+def _retryable_code(exc: Exception) -> int | None:
+    """The HTTP status of a google-genai error if it's transient, else None."""
+    code = getattr(exc, "code", None)
+    return code if isinstance(code, int) and code in _RETRYABLE_CODES else None
+
+
 def _generate_sync(image_bytes: bytes, prompt: str):
-    """Blocking Gemini call; run in a worker thread by ``generate_insights``."""
+    """One blocking Gemini call; run in a worker thread by ``generate_insights``.
+
+    Raises the raw SDK exception so the caller can read its status code and decide
+    whether to retry; ``generate_insights`` wraps the final failure for the UI.
+    """
     from google import genai
     from google.genai import types
 
     client = genai.Client(api_key=settings.api_key)
-    try:
-        return client.models.generate_content(
-            model=settings.model,
-            contents=[
-                types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
-                prompt,
-            ],
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                response_mime_type="application/json",
-                response_schema=InsightReport,
-                # gemini-2.5-* spend output tokens on internal "thinking"; with a low
-                # cap that left the JSON truncated (→ unparseable → raw dump in the UI).
-                # Disable thinking and give the answer room so the schema always closes.
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
-                max_output_tokens=2048,
-                temperature=0.4,
-            ),
-        )
-    except Exception as exc:  # SDK / network / provider-side failures
-        raise InsightsError(f"{settings.provider} request failed: {exc}") from exc
+    return client.models.generate_content(
+        model=settings.model,
+        contents=[
+            types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+            prompt,
+        ],
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_INSTRUCTION,
+            response_mime_type="application/json",
+            response_schema=InsightReport,
+            # gemini-2.5-* spend output tokens on internal "thinking"; with a low
+            # cap that left the JSON truncated (→ unparseable → raw dump in the UI).
+            # Disable thinking and give the answer room so the schema always closes.
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+            max_output_tokens=2048,
+            temperature=0.4,
+        ),
+    )
 
 
 async def generate_insights(image_bytes: bytes, profile: dict) -> dict:
-    """Run one multimodal request and return ``{report, model, provider, usage}``."""
+    """Run one multimodal request and return ``{report, model, provider, usage}``.
+
+    Transient provider errors (overload/rate-limit/5xx) are retried with
+    exponential backoff so a momentary Gemini spike doesn't fail the report; if
+    every attempt still fails we surface a plain "try again" message for the UI.
+    """
     if not settings.configured:
         raise InsightsUnavailable(
             "AI insights are not configured. Set INSIGHTS_API_KEY (or GEMINI_API_KEY)."
         )
     prompt = build_prompt(profile)
-    response = await asyncio.to_thread(_generate_sync, image_bytes, prompt)
-    return {
-        "report": _extract_report(response),
-        "model": settings.model,
-        "provider": settings.provider,
-        "usage": _usage(response),
-    }
+
+    last_exc: Exception | None = None
+    for attempt in range(_MAX_ATTEMPTS):
+        try:
+            response = await asyncio.to_thread(_generate_sync, image_bytes, prompt)
+            return {
+                "report": _extract_report(response),
+                "model": settings.model,
+                "provider": settings.provider,
+                "usage": _usage(response),
+            }
+        except Exception as exc:  # SDK / network / provider-side failure
+            if _retryable_code(exc) is None:
+                raise InsightsError(f"{settings.provider} request failed: {exc}") from exc
+            last_exc = exc
+            if attempt < _MAX_ATTEMPTS - 1:
+                await asyncio.sleep(_BACKOFF_BASE * 2 ** attempt + random.uniform(0, 0.4))
+
+    # Every attempt hit a transient error — tell the doctor to simply retry.
+    raise InsightsError(
+        f"{settings.provider.capitalize()} is busy right now. Please click "
+        "“Try again” to regenerate the insights in a moment."
+    ) from last_exc

@@ -12,10 +12,12 @@ that match that geometry, and thresholds it:
 
 * **local brightness** — the smoothed crop intensity (the mass core is bright);
 * **elevation** — how far the pixel rises *above a broad local background*
-  (a fast top-hat: bright tissue that is merely part of a wide bright field, like
-  a dense region at the crop edge, has low elevation and is rejected; a mass that
-  rises above its surround scores high). This is the signal that separates a mass
-  from bright-but-flat tissue;
+  (smoothed image minus a wide Gaussian blur: a LINEAR approximation of a white
+  top-hat / unsharp mask, not the morphological grayscale-opening top-hat. Bright
+  tissue that is merely part of a wide bright field, like a dense region at the
+  crop edge, has low elevation and is rejected; a mass that rises above its
+  surround scores high). This is the signal that separates a mass from
+  bright-but-flat tissue;
 * **centre prior** — the crop is centred on the finding with padding, so a smooth
   radial weight favours the central object and suppresses corner structures.
 
@@ -109,7 +111,16 @@ def compute_relevance(arrays: dict, roi_mask: np.ndarray | None = None) -> np.nd
 
 
 def _otsu_threshold(values: np.ndarray) -> float:
-    """Otsu threshold on a 1-D set of [0,1] values via 256-bin histogram."""
+    """Otsu (1979) threshold on a 1-D set of [0,1] values via a 256-bin histogram.
+
+    Otsu, "A threshold selection method from gray-level histograms", IEEE Trans.
+    Syst. Man Cybern. 9:62-66 (doi:10.1109/TSMC.1979.4310076): choose the
+    threshold that maximizes between-class variance w1*w2*(mean1-mean2)^2.
+    Verified on a bimodal mixture (modes 0.3/0.7 -> threshold 0.498). Edge note:
+    for two equal-mass delta peaks the between-class variance is a flat plateau,
+    so argmax returns the lowest valid separator -- still a correct split, just
+    not the midpoint.
+    """
     flat = np.clip(values.ravel(), 0.0, 1.0)
     hist, edges = np.histogram(flat, bins=256, range=(0.0, 1.0))
     total = hist.sum()

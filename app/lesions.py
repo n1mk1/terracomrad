@@ -61,12 +61,26 @@ def _trace_contour(mask: np.ndarray) -> list[list[int]]:
 
 
 def _perimeter(contour: list[list[int]]) -> float:
-    """Digital perimeter with the Vossepoel–Smeulders correction.
+    """Digital perimeter with Kulpa's chain-code correction.
 
-    Naively summing step lengths over-estimates the true boundary length of a
-    smooth curve (staircase effect). Weighting orthogonal vs diagonal steps by
-    0.948 and 1.340 recovers an accurate estimate, so circularity is meaningful
-    (digital disk -> ~1.0, square -> ~0.785).
+    Naively summing 8-connected step lengths (1 for an orthogonal step, sqrt(2)
+    for a diagonal) over-estimates the true boundary length of a smooth curve by
+    ~5.5% (the staircase / metrication effect). Kulpa (1977, "Area and perimeter
+    measurement of blobs in discrete binary pictures", Comput. Graph. Image
+    Process. 6:434-451) showed that scaling the chain-code length by k=0.9481
+    cancels that bias on a digitized circle; the weights used here are exactly
+    (k, k*sqrt(2)) = (0.948, 1.340).
+
+    NOTE on attribution: this is Kulpa's estimator, NOT Vossepoel-Smeulders
+    (1982), which fits *different* weights (0.980 orthogonal, 1.406 diagonal) plus
+    a -0.091 corner term. The two are easy to confuse; the (k, k*sqrt(2)) form is
+    the giveaway that these are Kulpa's.
+
+    Verified on synthetic shapes (see rigor tests): a digital disk -> circularity
+    1.00. Caveat measured there too: an axis-aligned square's outline is all
+    orthogonal steps, so Kulpa *under*-scales it and its circularity comes out
+    ~0.90 -- NOT the continuous-ideal pi/4 = 0.785. The correction is tuned for
+    curves, not straight axis-aligned edges.
     """
     if len(contour) < 2:
         return 0.0
@@ -80,7 +94,13 @@ def _perimeter(contour: list[list[int]]) -> float:
 
 
 def _convex_hull_area(points: np.ndarray) -> float:
-    """Monotone-chain convex hull area for an Nx2 array of (x, y) integer-ish points."""
+    """Convex-hull area via Andrew's monotone chain, for an Nx2 array of points.
+
+    Andrew (1979, "Another efficient algorithm for convex hulls in two
+    dimensions", Inf. Process. Lett. 9:216-219): lexicographic sort, then build a
+    lower and an upper hull in O(n log n); area via the shoelace formula. Drives
+    solidity = area / hull_area (verified: square hull == side^2; disk solidity 1.0).
+    """
     if points.shape[0] < 3:
         return float(points.shape[0])
     pts = points[np.lexsort((points[:, 1], points[:, 0]))]
@@ -107,7 +127,14 @@ def _convex_hull_area(points: np.ndarray) -> float:
 
 
 def _ellipse_eccentricity(mask: np.ndarray) -> float:
-    """Eccentricity of the fitted ellipse (0 = circle, 1 = degenerate line)."""
+    """Eccentricity of the ellipse with the same second central moments.
+
+    Fits via the covariance (second central moments) of the pixel coordinates and
+    takes eccentricity = sqrt(1 - lambda_min/lambda_max) from its eigenvalues --
+    the standard image-moment shape descriptor (Hu 1962 moment lineage; identical
+    definition to scikit-image regionprops). 0 = circle, ->1 = elongated. Verified:
+    a 2:1 ellipse -> 0.867 (analytic sqrt(1 - (1/2)^2) = 0.866).
+    """
     ys, xs = np.where(mask)
     if ys.size < 6:
         return 0.0
@@ -127,7 +154,11 @@ def _ellipse_eccentricity(mask: np.ndarray) -> float:
 def _radial_signature(contour: np.ndarray, centroid: tuple[float, float], n: int = 180) -> np.ndarray:
     """Resample centroid-to-contour distance onto `n` evenly-spaced angles.
 
-    A fixed-length angular signature makes the lobulation/spike measures
+    The centroid-to-boundary radial distance function is a classic shape
+    descriptor for mammographic masses (cf. Rangayyan et al.): a smooth round mass
+    gives a near-flat signature, lobulated/spiculated masses modulate it (broad
+    bumps vs narrow spikes -- separated downstream by _lobulation_index and
+    _spike_index). A fixed-length angular signature makes those measures
     independent of how many boundary pixels the tracer produced, and lets us
     smooth circularly without index gymnastics.
     """
@@ -239,6 +270,17 @@ def _spiculation_convergence(component: np.ndarray, img: np.ndarray, gradient: n
     low entropy (concentrated into spikes) -> ~1. Uses image intensity, so it can
     see spicules the segmentation outline missed. Returns 0 when the ring is too
     small to estimate an angular distribution reliably.
+
+    Method follows the orientation-concentration idea of Karssemeijer & te Brake
+    (1996, "Detection of stellate distortions in mammograms", IEEE Trans. Med.
+    Imaging 15:611-619): malignant stellate lesions radiate spicules, so
+    boundary-gradient orientations cluster at a few angles instead of spreading
+    evenly. Rigor-tested behaviour: this is a CONSERVATIVE, secondary cue -- it
+    stays ~0 for a uniform-edged disk and only climbs to a useful level (~0.33 in
+    tests) when spicules dominate the ring gradient; a strong competing circular
+    edge in the ring suppresses it. That is why classify_margin uses it only as
+    soft evidence (convergence > 0.60), with the cleaner outline-based
+    radial_spike_index as the primary spiculation signal.
     """
     ys, xs = np.where(component)
     if ys.size < 64:
@@ -314,6 +356,10 @@ def compute_geometry(lesion: dict, img: np.ndarray,
     centroid = lesion["centroid"]
     component = lesion["mask"]
 
+    # Circularity = isoperimetric ratio 4*pi*A / P^2 (a.k.a. compactness /
+    # Polsby-Popper): 1.0 for a perfect disk, lower for elongated or rough
+    # outlines. Clamped to 1.0 because digital perimeter estimation can dip just
+    # below the area-implied minimum.
     perimeter = _perimeter(contour)
     circularity = float(4 * np.pi * area_px / (perimeter ** 2)) if perimeter > 0 else 0.0
     circularity = min(circularity, 1.0)
