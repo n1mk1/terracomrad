@@ -28,14 +28,14 @@
                         </div>
                         <p class="intro-body">
                             TerraComrad connects radiologist and physician judgment with
-                            AI-assisted mass analysis. The system scans each image at scale —
+                            AI-assisted mass analysis. The system scans each image at scale:
                             segmenting masses, measuring shape and margin features, and scoring
                             boundary characteristics.
                         </p>
                         <p class="intro-body">
                             Here, algorithmic findings directed by clinicians act as a harness on
                             the liberties AI can take. Doctors draw regions of interest based on
-                            their workflow — processing patient history, diagnostic context, and
+                            their workflow: processing patient history, diagnostic context, and
                             implicit expertise that no algorithm can fully replicate yet. This is a
                             guardrail model: <strong>the physician prunes absurdity; AI narrows
                             the search.</strong>
@@ -101,7 +101,7 @@
 
                 <!-- Bundled test cases -->
                 <div class="demo-section">
-                    <p class="demo-heading">— bundled test cases —</p>
+                    <p class="demo-heading">bundled test cases</p>
                     <div class="demo-grid">
 
                         <button class="demo-card" data-demo="case1">
@@ -129,7 +129,7 @@
 
                     <p class="demo-note">
                         Demo cases are derived from a public research dataset. Load only
-                        publicly available or fully de-identified DICOM images here — never
+                        publicly available or fully de-identified DICOM images here, never
                         personal or patient health information.
                     </p>
                 </div>
@@ -145,7 +145,7 @@
                 <!-- Toolbar -->
                 <div class="toolbar">
                     <div class="tb-left">
-                        <span class="file-label" id="fileLabel">—</span>
+                        <span class="file-label" id="fileLabel">-</span>
                         <button class="btn btn-ghost btn-sm" id="openNewBtn">Open file</button>
                         <span class="save-status" id="saveStatus"></span>
                     </div>
@@ -167,9 +167,9 @@
                                 <option value="Arch. distortion">Arch. distortion</option>
                                 <option value="Other">Other</option>
                             </select>
-                            <button class="tool-btn" id="btnAnnotRect"    title="Rectangle ROI — box a finding">▭ Box</button>
-                            <button class="tool-btn" id="btnAnnotEllipse" title="Ellipse ROI — circle a mass">◯ Ellipse</button>
-                            <button class="tool-btn" id="btnAnnotFree"    title="Freehand ROI — trace a margin">✎ Trace</button>
+                            <button class="tool-btn" id="btnAnnotRect"    title="Rectangle ROI: box a finding">▭ Box</button>
+                            <button class="tool-btn" id="btnAnnotEllipse" title="Ellipse ROI: circle a mass">◯ Ellipse</button>
+                            <button class="tool-btn" id="btnAnnotFree"    title="Freehand ROI: trace a margin">✎ Trace</button>
                             <button class="tool-btn" id="btnAnnotUndo"    title="Undo last annotation" disabled>⟲</button>
                             <button class="tool-btn" id="btnAnnotClear"   title="Remove all annotations" disabled>Clear</button>
                         </div>
@@ -210,7 +210,7 @@
                     <!-- Doctor annotation layer (ROI shapes, pinned to base-image pixels) -->
                     <svg id="annotLayer" class="annot-layer hidden" xmlns="http://www.w3.org/2000/svg"></svg>
 
-                    <!-- Target ring — visual indicator of which image is active -->
+                    <!-- Target ring: visual indicator of which image is active -->
                     <div class="target-ring hidden" id="targetRing"></div>
 
                     <div class="overlay ov-tl" id="ovTL"></div>
@@ -298,7 +298,7 @@
                             <span class="insights-provider" id="insightsProvider">Gemini</span>
                         </div>
                         <p class="insights-disclaimer">
-                            Educational decision-support only — not a diagnosis. Generating sends the
+                            Educational decision-support only, not a diagnosis. Generating sends the
                             rendered image and AOI metrics to Google Gemini.
                         </p>
                         <button class="btn btn-sm btn-accent insights-btn" id="btnGenInsights">Generate AI insights</button>

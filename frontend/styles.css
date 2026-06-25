@@ -1191,7 +1191,7 @@ body {
 }
 [data-tip] { cursor: help; }
 
-/* ── Advanced metrics — collapsed by default ──────────────── */
+/* ── Advanced metrics, collapsed by default ──────────────── */
 .advanced-metrics {
     border-top: 1px dashed var(--border);
     padding-top: 8px;

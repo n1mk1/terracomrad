@@ -265,7 +265,7 @@ const NEUTRAL_COLOR = '#7a7a90';
 
 /* ── Metric tooltips ──────────────────────────────────────────
    Each entry explains a metric and, for the scored features, what a
-   HIGH vs LOW value means — so the panel stays curated while the
+   HIGH vs LOW value means, so the panel stays curated while the
    reasoning is one hover (or focus) away. `\n` becomes a line break. */
 const TIPS = {
     // Headline / key metrics
@@ -278,10 +278,10 @@ const TIPS = {
     area:        { t: 'Area',         b: 'Size of the AOI in pixels and as a share of the breast region.' },
     circularity: { t: 'Circularity',  b: 'High (→1): round, circular outline.\nLow (→0): elongated or jagged.' },
     eccentricity:{ t: 'Eccentricity', b: 'High (→1): elongated, line-like.\nLow (→0): near-circular.' },
-    solidity:    { t: 'Solidity',     b: 'High (→1): convex, smooth-bodied.\nLow: dimpled / concave — typical of spiculated masses.' },
+    solidity:    { t: 'Solidity',     b: 'High (→1): convex, smooth-bodied.\nLow: dimpled / concave, typical of spiculated masses.' },
     roughness:   { t: 'Contour roughness', b: 'High: jagged, irregular outline.\nLow: smooth outline.' },
     lobulation:  { t: 'Lobulation',   b: 'High: many rounded outward lobes.\nLow: a single smooth body.' },
-    spikes:      { t: 'Radial spikes', b: 'High: sharp radial spicules — suspicious.\nLow: no spikes.' },
+    spikes:      { t: 'Radial spikes', b: 'High: sharp radial spicules, suspicious.\nLow: no spikes.' },
     convergence: { t: 'Spiculation convergence', b: 'High: surrounding gradients radiate toward the mass (spiculation).\nLow: smooth, undisturbed surround.' },
     // Crown Shyness boundary metrics
     score:       { t: 'Crown Shyness score', b: 'High: strong, well-defined boundary that respects surrounding tissue.\nLow: weak or invasive-looking boundary.' },
@@ -432,7 +432,7 @@ function renderAnalysis(data) {
     drawScan();
 
     // Unguided localization withholds morphology; don't let the AI narrate a
-    // (false) "no finding / negative" read — gate it behind drawing an ROI.
+    // (false) "no finding / negative" read; gate it behind drawing an ROI.
     if (data.lesion_profile && data.lesion_profile.localization_quality === 'needs_roi'
         && insightsConfigured !== false) {
         reflectInsightsNeedsRoi();
@@ -443,9 +443,9 @@ function renderResultsTable(data) {
     const lp = data.lesion_profile || {};
     const pathologyLabel = `Risk: ${escapeHtml(lp.pathology || 'N/A')}`;
     resultsRow.innerHTML = `
-        <td>${escapeHtml(lp.image_label || state.fileId || '—')}</td>
-        <td>${escapeHtml(lp.is_there_an_aoi || '—')}</td>
-        <td>${lp.aoi_count ?? '—'}</td>
+        <td>${escapeHtml(lp.image_label || state.fileId || '-')}</td>
+        <td>${escapeHtml(lp.is_there_an_aoi || '-')}</td>
+        <td>${lp.aoi_count ?? '-'}</td>
         <td>${escapeHtml(lp.aoi_shape || 'N/A')}</td>
         <td>${escapeHtml(lp.aoi_margin || 'N/A')}</td>
         <td class="${pathologyClass(lp.pathology)}">${pathologyLabel}${lp.confidence != null ? ` (${(lp.confidence * 100).toFixed(0)}%)` : ''}</td>
@@ -467,12 +467,12 @@ function renderLesionCards(data) {
             </div>${a.note ? `<div class="doc-annot-note">📝 ${escapeHtml(a.note)}</div>` : ''}`).join('')
         : '<div class="aoi-none">No ROI annotations were drawn in the viewer.</div>';
 
-    // ── System analysis — largest AOI only ──
+    // ── System analysis: largest AOI only ──
     const lp = data.lesion_profile || {};
     let sysHtml;
     if (lp.localization_quality === 'needs_roi') {
         // Unguided localization is unverifiable, so the backend withholds morphology.
-        // Make that the guardrail call-to-action — not a misleading "nothing found".
+        // Make that the guardrail call-to-action, not a misleading "nothing found".
         sysHtml = `<div class="aoi-needs-roi">
             <span class="aoi-needs-roi-title">AI alone couldn't localize this</span>
             <span class="aoi-needs-roi-body">${escapeHtml(lp.message
@@ -506,7 +506,7 @@ function systemAoiCard(lesion, totalCount) {
     const aoiId = lesion.aoi_id;
     const interp = css.interpretation || 'ambiguous';
     const color = CSS_COLORS[interp] || NEUTRAL_COLOR;
-    const conf = lesion.confidence != null ? `${(lesion.confidence * 100).toFixed(0)}%` : '—';
+    const conf = lesion.confidence != null ? `${(lesion.confidence * 100).toFixed(0)}%` : '-';
 
     // ── Curated verdicts ──
     // The crop-centric pipeline always segments one compact central mass.
@@ -519,7 +519,7 @@ function systemAoiCard(lesion, totalCount) {
     const countNote = totalCount > 1
         ? `<div class="aoi-subnote">Largest of ${totalCount} detected AOIs.</div>`
         : '';
-    const areaText = `${geom.area_px ?? '—'} px (${formatNum(geom.area_pct)}%)`;
+    const areaText = `${geom.area_px ?? '-'} px (${formatNum(geom.area_pct)}%)`;
 
     return `
         <div class="lesion-card selected" data-lesion="${aoiId}" style="--lesion-color:${color}">
@@ -538,8 +538,8 @@ function systemAoiCard(lesion, totalCount) {
                 <summary>Advanced metrics · geometry + Crown Shyness</summary>
                 <dl class="lesion-kv">
                     <dt data-tip="area" tabindex="0">Area</dt><dd>${areaText}</dd>
-                    <dt>Bbox</dt><dd>${(geom.bbox || []).join(', ') || '—'}</dd>
-                    <dt>Centroid</dt><dd>${(geom.centroid || []).map(n => Math.round(n)).join(', ') || '—'}</dd>
+                    <dt>Bbox</dt><dd>${(geom.bbox || []).join(', ') || '-'}</dd>
+                    <dt>Centroid</dt><dd>${(geom.centroid || []).map(n => Math.round(n)).join(', ') || '-'}</dd>
                     <dt data-tip="circularity" tabindex="0">Circularity</dt><dd>${formatNum(geom.circularity)}</dd>
                     <dt data-tip="eccentricity" tabindex="0">Eccentricity</dt><dd>${formatNum(geom.eccentricity)}</dd>
                     <dt data-tip="solidity" tabindex="0">Solidity</dt><dd>${formatNum(geom.solidity)}</dd>
@@ -637,7 +637,7 @@ function drawOverlays() {
     }
 
     const lesions = (currentAnalysis.lesion_profile && currentAnalysis.lesion_profile.aois) || [];
-    // Focus the per-AOI overlay on the largest AOI — the one shown in the panel.
+    // Focus the per-AOI overlay on the largest AOI, the one shown in the panel.
     const largest = lesions.length ? largestByArea(lesions) : null;
     [largest].filter(Boolean).forEach(lesion => {
         const aoiId = lesion.aoi_id;
@@ -707,7 +707,7 @@ function pathologyClass(p) {
 }
 
 function formatNum(v) {
-    if (v == null || Number.isNaN(Number(v))) return '—';
+    if (v == null || Number.isNaN(Number(v))) return '-';
     return Number(v).toFixed(3);
 }
 
@@ -805,7 +805,7 @@ dicomImg.addEventListener('load', () => {
 });
 dicomImg.addEventListener('error', () => {
     showSpinner(false);
-    showError('Failed to render image — unsupported transfer syntax or corrupt file.');
+    showError('Failed to render image: unsupported transfer syntax or corrupt file.');
 });
 
 /* ── Load mask image from backend ─────────────────────────── */
@@ -983,7 +983,7 @@ btnReset.addEventListener('click', () => {
     loadImage(); if (state.maskFileId) loadMaskImage();
 });
 
-/* ── WW/WL sliders — routed to current target ─────────────── */
+/* ── WW/WL sliders, routed to current target ─────────────── */
 wwSlider.addEventListener('input', () => {
     const v = parseInt(wwSlider.value, 10); wwVal.textContent = v;
     if (state.target === 'base') { state.ww = v; updateOverlays(); loadImage(200); }
@@ -1063,13 +1063,13 @@ function setSaveStatus(msg, cls) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   Doctor annotations (ROI) — the viewer's "second window" markup layer
+   Doctor annotations (ROI): the viewer's "second window" markup layer
 
    Three region tools radiologists rely on, each defining an Area of
    Interest the system analysis can reason about:
-     • Box      — rectangle ROI, fast localisation of a finding
-     • Ellipse  — circle/oval ROI, natural for rounded masses & density
-     • Trace    — freehand polygon, for tracing irregular margins
+     • Box:     rectangle ROI, fast localisation of a finding
+     • Ellipse: circle/oval ROI, natural for rounded masses & density
+     • Trace:   freehand polygon, for tracing irregular margins
 
    Shapes are stored in base-image pixel coordinates, so they stay pinned
    to anatomy through pan / zoom / rotate / flip, and map 1:1 onto the
@@ -1431,7 +1431,7 @@ function updateAnnotButtons() {
 function updateAnnotHint() {
     if (annotTool) {
         const names = { rect: 'Box', ellipse: 'Ellipse', freehand: 'Trace' };
-        annotHint.textContent = `${names[annotTool]} tool active — drag on the image to draw. Esc cancels.`;
+        annotHint.textContent = `${names[annotTool]} tool active: drag on the image to draw. Esc cancels.`;
     } else if (annotations.length) {
         annotHint.textContent = 'Click a chip or shape to select · Del removes · double-click a chip to label · 📝 adds a note.';
     } else {
@@ -1513,10 +1513,10 @@ function drawDoctorAnnotations(ctx, sx, sy) {
    AI Insights (optional Gemini layer)
 
    Flattens the analysis screen's scan + overlay canvases into one PNG,
-   packages the compact AOI profile (built from data already in hand — no
+   packages the compact AOI profile (built from data already in hand, no
    pipeline re-run), and POSTs both to /api/insights for a single multimodal
    Gemini call. The returned fixed-schema report renders in the left rail.
-   Educational decision-support only — never a verdict.
+   Educational decision-support only, never a verdict.
    ══════════════════════════════════════════════════════════════════ */
 let insightsBusy       = false;
 let insightsConfigured = null;   // null = unknown until the status check resolves
@@ -1655,7 +1655,7 @@ async function generateInsights() {
     } catch (err) {
         insightsBody.innerHTML =
             `<div class="insights-error">AI insights failed: ${escapeHtml(err.message)}`
-            + `<div class="insights-error-hint">Click <strong>Try again</strong> below to regenerate — `
+            + `<div class="insights-error-hint">Click <strong>Try again</strong> below to regenerate; `
             + `your annotations and analysis are kept.</div>`
             + `</div>`;
         btnGenInsights.textContent = 'Try again';
