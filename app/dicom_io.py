@@ -51,7 +51,7 @@ def default_wwwl(ds) -> tuple[float, float]:
     wl = _scalar(getattr(ds, "WindowCenter", None))
     if ww is None or wl is None:
         try:
-            px = ds.pixel_array.astype(float)
+            px = ds.pixel_array.astype(np.float32)
             px = px * float(getattr(ds, "RescaleSlope", 1)) + float(getattr(ds, "RescaleIntercept", 0))
             if ww is None: ww = float(px.max() - px.min())
             if wl is None: wl = float((px.max() + px.min()) / 2)
@@ -99,7 +99,11 @@ def rescale_mono(ds, pixels: np.ndarray) -> np.ndarray:
     """
     if pixels.ndim == 3:
         pixels = pixels[0]
-    pixels = pixels.astype(float)
+    # float32, not float64: halves the transient array for a full-res mammogram
+    # (a 6000x4600 mask drops from ~220 MB to ~110 MB), which keeps a small host
+    # from OOM-ing on render. The result is windowed down to uint8 next, so the
+    # reduced precision never changes the rendered or analyzed output.
+    pixels = pixels.astype(np.float32)
     return pixels * float(getattr(ds, "RescaleSlope", 1)) + float(getattr(ds, "RescaleIntercept", 0))
 
 
