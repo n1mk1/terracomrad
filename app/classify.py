@@ -11,15 +11,24 @@ SHAPE (round / oval / lobulated / irregular) and MARGIN (circumscribed /
 microlobulated / obscured / indistinct[="ill-defined"] / spiculated). The compound
 margin strings (e.g. MICROLOBULATED-ILL_DEFINED-SPICULATED) are intentional -- they
 mirror the CBIS-DDSM ground-truth encoding the companion study prompts against, not
-a bug. The pathology weighting reflects the published BI-RADS malignancy
-associations: spiculated margins (~86% positive predictive value) and irregular
-shape (~62% PPV) raise suspicion, while circumscribed margins (~90% negative
-predictive value) and round/oval shape (~84% NPV) lower it. The exact numeric
-weights in classify_pathology are hand-set for the demo, NOT fitted to outcomes.
+a bug. The pathology weighting reflects published BI-RADS feature associations:
+spiculated margins (PPV ~81-90%) and irregular shape (PPV ~73%) raise suspicion,
+while circumscribed margins and round/oval shape are reassuring (circumscribed
+margin NPV ~90%; a round/oval, circumscribed, low-density mass is benign at
+~95% NPV). These are representative literature values that vary by population and
+modality (e.g. Liberman et al., AJR 1998, PMID 9648759), not fixed constants; the
+numeric weights in classify_pathology are hand-set for the demo, NOT fitted to
+outcomes.
 """
 
 
 def classify_shape(geom: dict) -> str:
+    """Map geometry features to one ACR BI-RADS mass shape label.
+
+    Tests the most specific patterns first (Lobulated -> Round -> Oval) and falls
+    through to Irregular, so a mass earns a "smooth" label only when it clears the
+    circularity / convexity / low-spike thresholds. Conservative demo heuristic.
+    """
     circularity = geom["circularity"]
     eccentricity = geom["eccentricity"]
     solidity = geom["solidity"]

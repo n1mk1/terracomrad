@@ -103,6 +103,7 @@ def _downsample_outline(contour: list, max_points: int = 96) -> list[list[int]]:
 
 
 def _no_lesion_profile(image_label: str, analysis_quality: dict | None = None) -> dict:
+    """AOI profile for the case where localization ran but no candidate mass remained."""
     analysis_quality = analysis_quality or {"localization_quality": "acceptable_heuristic", "quality_flags": []}
     return {
         "image_label": image_label,

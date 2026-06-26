@@ -13,6 +13,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _env_float(name: str, default: float) -> float:
+    """Read an environment variable as a float, falling back to `default` if unset/invalid."""
     try:
         return float(os.getenv(name, str(default)))
     except (TypeError, ValueError):
@@ -63,6 +64,7 @@ def unique_upload_name(name: str) -> str:
 
 
 def _prune_dir(directory: Path, ttl_seconds: float, keep: tuple[str, ...] = (".gitkeep",)) -> None:
+    """Delete files in `directory` older than `ttl_seconds` (by mtime); never touch `keep`."""
     cutoff = time.time() - ttl_seconds
     try:
         entries = list(directory.iterdir())

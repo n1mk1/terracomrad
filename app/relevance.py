@@ -66,6 +66,7 @@ def _center_prior(shape: tuple[int, int], cy: float, cx: float, width: float) ->
 
 
 def _roi_centroid(roi_mask: np.ndarray, shape: tuple[int, int]) -> tuple[float, float]:
+    """Centroid (cy, cx) of the ROI mask; the frame centre when the mask is empty."""
     ys, xs = np.where(roi_mask)
     if ys.size == 0:
         return shape[0] / 2.0, shape[1] / 2.0

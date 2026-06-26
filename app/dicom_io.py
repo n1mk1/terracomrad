@@ -8,6 +8,7 @@ from PIL import Image
 
 
 def _safe_attr(ds, attr: str) -> str:
+    """Read a DICOM attribute as a trimmed string, or '' if absent/unreadable."""
     try:
         v = getattr(ds, attr, "")
         return str(v).strip() if v else ""
@@ -16,6 +17,10 @@ def _safe_attr(ds, attr: str) -> str:
 
 
 def extract_meta(ds) -> dict:
+    """Curated, human-readable DICOM header fields for the viewer's metadata panel.
+
+    Only tags that are present and non-empty are returned (see _safe_attr).
+    """
     fields = [
         ("PatientName",           "Patient Name"),
         ("PatientID",             "Patient ID"),
@@ -38,6 +43,7 @@ def extract_meta(ds) -> dict:
 
 
 def _scalar(val) -> float | None:
+    """Coerce a DICOM value to float, taking the first element of a multi-valued tag."""
     if val is None:
         return None
     try:
@@ -47,6 +53,13 @@ def _scalar(val) -> float | None:
 
 
 def default_wwwl(ds) -> tuple[float, float]:
+    """Deterministic display window for the image.
+
+    Uses the stored WindowWidth/WindowCenter when present; otherwise falls back to
+    the modality-rescaled pixel min/max (full-range width, midpoint center), and to
+    400/40 only if the pixels can't be read. The analysis pipeline normalizes with
+    this window, so it must not depend on the live viewer setting.
+    """
     ww = _scalar(getattr(ds, "WindowWidth",  None))
     wl = _scalar(getattr(ds, "WindowCenter", None))
     if ww is None or wl is None:

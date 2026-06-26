@@ -176,6 +176,11 @@ def _radial_signature(contour: np.ndarray, centroid: tuple[float, float], n: int
 
 
 def _circular_smooth(sig: np.ndarray, frac: float = 0.12) -> np.ndarray:
+    """Circular moving-average smooth of the radial signature.
+
+    The window is an odd fraction (`frac`) of the signature length; the signature
+    is wrapped at both ends before convolving so angle 0 and 2*pi join seamlessly.
+    """
     n = sig.size
     win = max(3, int(round(n * frac)) | 1)  # odd
     k = np.ones(win) / win

@@ -14,6 +14,11 @@ VISIBILITY_FLOOR = 0.18        # minimum normalized gradient counted as a "visib
 
 
 def _gradient_magnitude(img: np.ndarray) -> np.ndarray:
+    """Plain gradient magnitude via np.gradient (central differences).
+
+    A fallback for standalone use; the pipeline normally passes in the shared
+    smoothed (DoG) gradient from app.maps instead.
+    """
     gy, gx = np.gradient(img.astype(float))
     return np.sqrt(gx ** 2 + gy ** 2)
 
