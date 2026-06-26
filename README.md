@@ -6,16 +6,16 @@ the pipeline reproduces the radiologist's mass mask **without any ML** and
 reports shape, margin, geometry, and Crown-Shyness metrics. An optional AI
 Insights layer can narrate the result via Google Gemini Flash.
 
-> Research / demo prototype — **not a clinical diagnostic tool.**
+> Research / demo prototype. **Not a clinical diagnostic tool.**
 
 ## Features
 
 - **DICOM viewer** with window-width / window-level controls and standard transforms.
-- **ROI annotation** — Box, Ellipse, and Trace tools with optional labels and short notes.
-- **Deterministic analysis pipeline** — no ML, no randomness. Segments the dominant
+- **ROI annotation**: Box, Ellipse, and Trace tools with optional labels and short notes.
+- **Deterministic analysis pipeline**: no ML, no randomness. Segments the dominant
   mass, then measures geometry, margin, and Crown-Shyness; produces a rule-based
   shape / margin / pathology label set.
-- **Optional AI Insights** — when a Google Gemini key is configured, the analysis
+- **Optional AI Insights**: when a Google Gemini key is configured, the analysis
   screen can send the rendered AOI image plus the measured profile to Gemini in
   a single multimodal call and render a structured narrative report. **Off by
   default**; with no key set, nothing leaves the machine.
@@ -47,7 +47,7 @@ frontend/            Single-page UI (no build step)
 
 backend/
   demos/             Bundled demo DICOM cases (kept in git)
-  uploads/           Runtime scratch — DICOMs copied here on demo open / upload
+  uploads/           Runtime scratch: DICOMs copied here on demo open / upload
   aoi_logs/          Per-analysis JSON logs
 
 pyproject.toml       uv / pip dependency spec
@@ -81,7 +81,7 @@ Then open <http://127.0.0.1:8000>.
 
 ## Configuration
 
-The viewer and analysis pipeline need **no** configuration — they run fully
+The viewer and analysis pipeline need **no** configuration; they run fully
 locally with no network calls.
 
 To enable the optional **AI Insights** panel:
@@ -121,20 +121,20 @@ With no key set, `/api/insights/status` reports disabled and the panel shows a
 ## Workflow
 
 1. **Open** a DICOM image (uploaded or bundled demo).
-2. **Annotate** in the viewer — mark Areas of Interest with the Box, Ellipse,
+2. **Annotate** in the viewer: mark Areas of Interest with the Box, Ellipse,
    or Trace tool, each with an optional label and a short note (≤ 100 chars).
-3. **Start Analysis** — the pipeline measures every AOI; the panel shows the
+3. **Start Analysis**: the pipeline measures every AOI; the panel shows the
    largest AOI's shape, margin, geometry, and Crown-Shyness metrics alongside
    the doctor's annotations.
-4. *(optional)* **Generate AI insights** — sends the flattened composite plus
+4. *(optional)* **Generate AI insights**: sends the flattened composite plus
    the compact profile to Gemini and renders a structured narrative report.
 
 ## Deployment
 
 The app is a long-running uvicorn server that needs a **writable local disk**
 (it stores opened DICOMs under `backend/uploads/` and analysis logs under
-`backend/aoi_logs/`). That suits a container/VM host — Render, Railway, Fly.io,
-Cloud Run, or a plain VPS — not a read-only serverless platform.
+`backend/aoi_logs/`). That suits a container/VM host (Render, Railway, Fly.io,
+Cloud Run, or a plain VPS), not a read-only serverless platform.
 
 A `Dockerfile` is included; every host below builds from it. For Render, a
 `render.yaml` Blueprint is also included for a one-click, pre-wired deploy.
@@ -153,21 +153,20 @@ Then open <http://127.0.0.1:8000>.
 
 | Host | Steps |
 | --- | --- |
-| **Render** | New → **Blueprint** → connect the repo → Apply (uses the bundled `render.yaml`, which wires the `/healthz` check and a persistent disk for logs). Or New → Web Service → *Docker* runtime for a manual setup. Render injects `$PORT`. |
+| **Render** | New → **Blueprint** → connect the repo → Apply (uses the bundled `render.yaml`, which wires the `/healthz` check and ephemeral 2h-TTL logs). Or New → Web Service → *Docker* runtime for a manual setup. Render injects `$PORT`. |
 | **Railway** | New Project → Deploy from repo. The Dockerfile is auto-detected; `$PORT` is injected. |
 | **Fly.io** | `fly launch` (detects the Dockerfile) → set the service `internal_port` to `8000`. |
 
 Notes:
 
 - `backend/demos/` ships in the image so the bundled demo cases work.
-- `backend/uploads/` and `backend/aoi_logs/` are **ephemeral scratch** — fine
-  for demos, but they reset on every redeploy unless mounted to a disk. The
-  bundled `render.yaml` mounts a persistent disk at `backend/aoi_logs/` only, so
-  research logs survive redeploys while uploads stay ephemeral; add your own
-  volume (or external storage) if you need uploads to persist too. Each upload
-  gets a unique on-disk name (no cross-user collisions), and files older than
-  `SCRATCH_TTL_HOURS` are pruned automatically so a long-lived instance can't
-  fill its disk.
+- `backend/uploads/` and `backend/aoi_logs/` are **ephemeral scratch**: fine
+  for demos, but they reset on every redeploy and are not backed by a disk. The
+  bundled `render.yaml` keeps them ephemeral on purpose and sets
+  `SCRATCH_TTL_HOURS=2`, so files are pruned ~2h after upload and a long-lived
+  instance can't fill its disk. To retain research logs across redeploys, mount
+  a disk at `backend/aoi_logs/` and set `SCRATCH_TTL_HOURS=0`. Each upload gets a
+  unique on-disk name (no cross-user collisions).
 - The AI-insights endpoint is rate-limited per IP (`INSIGHTS_RATE_LIMIT_PER_MIN`)
   to protect a configured key's quota/billing. Behind a proxy the limiter reads
   `X-Forwarded-For`; with multiple workers the limit is per-worker.
@@ -177,5 +176,5 @@ Notes:
   demand, not on every push), so trigger a manual deploy from the Render
   dashboard after you push changes.
 - Set `INSIGHTS_API_KEY` (and any overrides) as environment variables in the
-  host's dashboard to enable the AI Insights layer — never bake the key into the
+  host's dashboard to enable the AI Insights layer; never bake the key into the
   image (`.env` is excluded from the build context).

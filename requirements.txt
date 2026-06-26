@@ -13,9 +13,9 @@ Pillow==12.2.0
 scipy==1.15.3
 google-genai==2.9.0
 
-# DICOM pixel decoder — lets users upload *compressed* mammograms (JPEG 2000 /
+# DICOM pixel decoder: lets users upload *compressed* mammograms (JPEG 2000 /
 # JPEG-LS / JPEG baseline). Without it, pydicom only reads uncompressed DICOMs and
 # compressed uploads fail with "unsupported transfer syntax". The bundled demos are
-# uncompressed, so this is only needed once people upload their own files. One
-# binary wheel, covers all common transfer syntaxes — no system libraries required.
+# uncompressed, so this is only needed when users upload their own files. One
+# binary wheel covers all common transfer syntaxes; no system libraries required.
 python-gdcm==3.2.6

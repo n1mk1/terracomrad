@@ -263,10 +263,9 @@ const CSS_COLORS = {
 };
 const NEUTRAL_COLOR = '#7a7a90';
 
-/* ── Metric tooltips ──────────────────────────────────────────
-   Each entry explains a metric and, for the scored features, what a
-   HIGH vs LOW value means, so the panel stays curated while the
-   reasoning is one hover (or focus) away. `\n` becomes a line break. */
+/* ── Metric tooltips ──────────────────────────────────────── */
+// Per-metric help text; for scored features, what HIGH vs LOW means.
+// `\n` becomes a line break when the bubble is rendered.
 const TIPS = {
     // Headline / key metrics
     detection:   { t: 'Detection',   b: 'Whether the system isolated a compact area of interest (AOI).\nDriven by mass compactness and how much breast area it occupies.' },
@@ -1062,19 +1061,11 @@ function setSaveStatus(msg, cls) {
     saveStatus.className   = `save-status ${cls}`;
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   Doctor annotations (ROI): the viewer's "second window" markup layer
-
-   Three region tools radiologists rely on, each defining an Area of
-   Interest the system analysis can reason about:
-     • Box:     rectangle ROI, fast localisation of a finding
-     • Ellipse: circle/oval ROI, natural for rounded masses & density
-     • Trace:   freehand polygon, for tracing irregular margins
-
-   Shapes are stored in base-image pixel coordinates, so they stay pinned
-   to anatomy through pan / zoom / rotate / flip, and map 1:1 onto the
-   analysis canvas. Everything lives in the browser; no API/info transfer.
-   ══════════════════════════════════════════════════════════════════ */
+/* ── Doctor annotations (ROI) ─────────────────────────────── */
+// Box / Ellipse / Trace tools mark an Area of Interest for the analysis.
+// Shapes are stored in base-image pixel coords, so they stay pinned to
+// anatomy through pan/zoom/rotate/flip and map 1:1 onto the analysis canvas.
+// Browser-only; nothing is sent to the server.
 
 const ANNOT_COLORS = {
     'Mass':             '#f5a524',
@@ -1292,10 +1283,9 @@ function clearAnnots() {
     annotations = []; selectedAnnotId = null;
     renderAnnots(); renderAnnotChips(); updateAnnotButtons();
 }
-/* ── Foreground text modal (replaces native window.prompt) ───
-   A single centered panel reused for both labelling and noting an
-   ROI. Returns a Promise that resolves to the entered string, or to
-   null if the doctor cancels (Esc, ✕, Cancel, or backdrop click). */
+/* ── Foreground text modal (replaces native window.prompt) ── */
+// One centered panel reused for labelling and noting an ROI. Returns a
+// Promise that resolves to the entered string, or null if the doctor cancels.
 let annotModalResolve = null;   // pending Promise resolver, or null when closed
 let annotModalMax     = 0;      // active char cap; 0 = uncapped (counter hidden)
 
@@ -1408,9 +1398,8 @@ function renderAnnotChips() {
     updateAnnotHint();
 }
 
-// Chip interactions are delegated (bound once) because renderAnnotChips rebuilds
-// the chip markup via innerHTML on every annotation change. Buttons are checked
-// before chip-select, matching the prior stopPropagation + early-return logic.
+// Chip clicks are delegated (bound once) because renderAnnotChips rebuilds the
+// chip markup via innerHTML on every change. Check the buttons before chip-select.
 annotChips.addEventListener('click', e => {
     const del = e.target.closest('[data-del]');
     if (del) { deleteAnnot(del.dataset.del); return; }
@@ -1509,15 +1498,10 @@ function drawDoctorAnnotations(ctx, sx, sy) {
     ctx.restore();
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   AI Insights (optional Gemini layer)
-
-   Flattens the analysis screen's scan + overlay canvases into one PNG,
-   packages the compact AOI profile (built from data already in hand, no
-   pipeline re-run), and POSTs both to /api/insights for a single multimodal
-   Gemini call. The returned fixed-schema report renders in the left rail.
-   Educational decision-support only, never a verdict.
-   ══════════════════════════════════════════════════════════════════ */
+/* ── AI Insights (optional Gemini layer) ──────────────────── */
+// Flattens the scan + overlay canvases into one PNG, packages the compact
+// AOI profile, and POSTs both to /api/insights for a single multimodal
+// Gemini call. The structured report renders in the left rail.
 let insightsBusy       = false;
 let insightsConfigured = null;   // null = unknown until the status check resolves
 
@@ -1665,9 +1649,8 @@ async function generateInsights() {
     }
 }
 
-/* Minimal, XSS-safe Markdown → HTML for the narrative fields. Escapes first,
-   then formats a small subset (bold, italic, inline code, bullet / numbered
-   lists, paragraphs) so the report reads as prose instead of raw JSON text. */
+/* Minimal, XSS-safe Markdown → HTML for the narrative fields: escape first,
+   then format a small subset (bold, italic, code, lists, paragraphs). */
 function mdInline(s) {
     return s
         .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
