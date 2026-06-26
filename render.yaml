@@ -19,11 +19,13 @@ services:
         sync: false
       - key: ENABLE_DOCS
         value: "false"
+      # Delete uploaded/scratch files ~2h after upload (vs the 24h default) so a
+      # burst day can't pile files on the ephemeral disk. 0 = keep forever.
+      - key: SCRATCH_TTL_HOURS
+        value: "2"
       # Optional overrides — defaults are fine for a small demo. Uncomment to change:
       # - key: MAX_UPLOAD_MB                  # default 80
       #   value: "40"
-      # - key: SCRATCH_TTL_HOURS             # default 24 (0 = keep forever)
-      #   value: "24"
       # - key: INSIGHTS_RATE_LIMIT_PER_MIN   # default 15 per IP (0 = unlimited)
       #   value: "15"
 
