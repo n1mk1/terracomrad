@@ -56,6 +56,7 @@ uv.lock              uv lockfile (local reproducibility)
 .env.example         Template for the optional AI Insights key
 Dockerfile           Container image for production hosts
 .dockerignore        Files excluded from the Docker build context
+render.yaml          Render Blueprint (one-click deploy spec)
 ```
 
 ## Run Locally
@@ -135,7 +136,8 @@ The app is a long-running uvicorn server that needs a **writable local disk**
 `backend/aoi_logs/`). That suits a container/VM host — Render, Railway, Fly.io,
 Cloud Run, or a plain VPS — not a read-only serverless platform.
 
-A `Dockerfile` is included; every host below builds from it.
+A `Dockerfile` is included; every host below builds from it. For Render, a
+`render.yaml` Blueprint is also included for a one-click, pre-wired deploy.
 
 ### Build and run locally
 
@@ -151,7 +153,7 @@ Then open <http://127.0.0.1:8000>.
 
 | Host | Steps |
 | --- | --- |
-| **Render** | New → Web Service → connect the repo → *Docker* runtime. Render injects `$PORT`; no extra config. |
+| **Render** | New → **Blueprint** → connect the repo → Apply (uses the bundled `render.yaml`, which wires the `/healthz` check and a persistent disk for logs). Or New → Web Service → *Docker* runtime for a manual setup. Render injects `$PORT`. |
 | **Railway** | New Project → Deploy from repo. The Dockerfile is auto-detected; `$PORT` is injected. |
 | **Fly.io** | `fly launch` (detects the Dockerfile) → set the service `internal_port` to `8000`. |
 
@@ -159,8 +161,10 @@ Notes:
 
 - `backend/demos/` ships in the image so the bundled demo cases work.
 - `backend/uploads/` and `backend/aoi_logs/` are **ephemeral scratch** — fine
-  for demos, but they reset on every redeploy. Add a persistent volume (or
-  external storage) if you need uploads/logs to survive restarts. Each upload
+  for demos, but they reset on every redeploy unless mounted to a disk. The
+  bundled `render.yaml` mounts a persistent disk at `backend/aoi_logs/` only, so
+  research logs survive redeploys while uploads stay ephemeral; add your own
+  volume (or external storage) if you need uploads to persist too. Each upload
   gets a unique on-disk name (no cross-user collisions), and files older than
   `SCRATCH_TTL_HOURS` are pruned automatically so a long-lived instance can't
   fill its disk.
@@ -169,6 +173,9 @@ Notes:
   `X-Forwarded-For`; with multiple workers the limit is per-worker.
 - Interactive API docs (`/docs`) are **off by default**; set `ENABLE_DOCS=true`
   to expose them (handy for local development).
+- The `render.yaml` Blueprint sets `autoDeploy: false` (a demo redeploys on
+  demand, not on every push), so trigger a manual deploy from the Render
+  dashboard after you push changes.
 - Set `INSIGHTS_API_KEY` (and any overrides) as environment variables in the
   host's dashboard to enable the AI Insights layer — never bake the key into the
   image (`.env` is excluded from the build context).
