@@ -29,11 +29,7 @@ services:
       # - key: INSIGHTS_RATE_LIMIT_PER_MIN   # default 15 per IP (0 = unlimited)
       #   value: "15"
 
-    # Persist the per-analysis research logs (backend/aoi_logs) across redeploys.
-    # Mounted at the logs path ONLY, so it does not shadow the baked-in backend/demos
-    # (uploads stay ephemeral, which is fine). Remove this whole block if you don't
-    # need to keep the logs — a disk requires a paid plan and bills ~$0.25/GB/month.
-    disk:
-      name: aoi-logs
-      mountPath: /app/backend/aoi_logs
-      sizeGB: 1
+    # No persistent disk on purpose: this is a throwaway demo and SCRATCH_TTL_HOURS=2
+    # already clears uploads + aoi_logs every ~2h, so a paid disk would just empty on
+    # that same cycle. To retain the research JSON later, re-add a disk: block mounted
+    # at /app/backend/aoi_logs AND set SCRATCH_TTL_HOURS=0 (don't prune what you keep).
