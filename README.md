@@ -156,81 +156,83 @@ DICOM crop
 
 ## Stages
 
-1. **DICOM I/O — `dicom_io.py`.** Decodes pixels, applies the Modality LUT
-   (`value = slope·SV + intercept`) then the linear VOI/window LUT, and inverts
+1. **DICOM I/O (`dicom_io.py`).** Decodes pixels, applies the Modality LUT
+   (`value = slope·SV + intercept`), then the linear VOI/window LUT, and inverts
    MONOCHROME1. *(DICOM PS3.3 §C.11.1–.2.)*
 
-2. **Preprocess — `preprocess.py`.** Pins the image's *own* default window (never the
-   live viewer), maps RGB→luma if needed, and Lanczos-resizes to a 512² float image
+2. **Preprocess (`preprocess.py`).** Pins the image's own default window rather than the
+   live viewer, maps RGB→luma when needed, and Lanczos-resizes to a 512² float image
    in [0,1]. *(ITU-R BT.601; Duchon 1979.)*
 
-3. **Breast mask — `maps.py`.** Otsu threshold maximising between-class variance
-   `ω₀·ω₁·(μ₀−μ₁)²`, then largest bright component with holes filled. *(Otsu 1979.)*
+3. **Breast mask (`maps.py`).** Otsu threshold maximising between-class variance
+   `ω₀·ω₁·(μ₀−μ₁)²`, then the largest bright component with holes filled. *(Otsu 1979.)*
 
-4. **Gradient map — `maps.py`.** First-derivative-of-Gaussian magnitude (σ=1), shared
+4. **Gradient map (`maps.py`).** First-derivative-of-Gaussian magnitude (σ=1), shared
    by the margin and boundary metrics. *(Canny 1986.)*
 
-5. **Mass-likelihood — `relevance.py`.** Per-pixel score
-   `(0.5·intensity + 0.5·elevation)·(0.85·prior + 0.15)`, where elevation =
-   smoothed − broad Gaussian background (a linear top-hat / unsharp mask) and a
+5. **Mass-likelihood (`relevance.py`).** Per-pixel score
+   `(0.5·intensity + 0.5·elevation)·(0.85·prior + 0.15)`. Elevation is the smoothed
+   image minus a broad Gaussian background (a linear top-hat or unsharp mask), and a
    Gaussian centre prior favours the central object. *(Top-hat: Soille 2003.)*
 
-6. **Segment mass — `relevance.py`.** Otsu over the central (or ROI-dilated) search
-   region, keep the central component, then fill/close/dilate; ROI-collapse fallback;
-   `<256 px ⇒ "no mass"`. *(Otsu 1979.)*
+6. **Segment mass (`relevance.py`).** Otsu over the central or ROI-dilated search
+   region, keep the central component, then fill, close, and dilate. A ROI-collapse
+   fallback applies, and `<256 px ⇒ "no mass"`. *(Otsu 1979.)*
 
-7. **Components + contour — `lesions.py`.** 8-connected labelling; Moore-neighbour
-   boundary tracing with Jacob's stopping criterion (each boundary pixel once).
-   *(Gonzalez & Woods.)*
+7. **Components + contour (`lesions.py`).** 8-connected labelling, then Moore-neighbour
+   boundary tracing with Jacob's stopping criterion so each boundary pixel is visited
+   once. *(Gonzalez & Woods.)*
 
-8. **Perimeter + circularity — `lesions.py`.** Kulpa chain-code correction
-   `P = 0.948·n_ortho + 1.340·n_diag` (fixes the ~5.5 % staircase bias), then
-   circularity `4πA / P²`. *(Kulpa 1977.)*
+8. **Perimeter + circularity (`lesions.py`).** Kulpa chain-code correction
+   `P = 0.948·n_ortho + 1.340·n_diag`, which removes the roughly 5.5% staircase bias,
+   then circularity `4πA / P²`. *(Kulpa 1977.)*
 
-9. **Solidity — `lesions.py`.** `A / A_hull`, with the convex hull from Andrew's
-   monotone chain and shoelace area. *(Andrew 1979.)*
+9. **Solidity (`lesions.py`).** `A / A_hull`, using the convex hull from Andrew's
+   monotone chain and a shoelace area. *(Andrew 1979.)*
 
-10. **Eccentricity — `lesions.py`.** `√(1 − λ_min/λ_max)` from the eigenvalues of the
-    pixel second-moment covariance (0 = circle → 1 = elongated). *(Hu 1962.)*
+10. **Eccentricity (`lesions.py`).** `√(1 − λ_min/λ_max)` from the eigenvalues of the
+    pixel second-moment covariance, running from 0 for a circle to 1 for an elongated
+    shape. *(Hu 1962.)*
 
-11. **Lobulation / spicules / convergence — `lesions.py`.** From the 180-point
-    centroid-to-contour radial signature: broad peaks = lobulation, narrow outward
-    excursions = spicules; the angular entropy of ring gradients = spiculation
-    convergence. *(Rangayyan 1997; Karssemeijer & te Brake 1996.)*
+11. **Lobulation / spicules / convergence (`lesions.py`).** From the 180-point
+    centroid-to-contour radial signature: broad peaks give lobulation and narrow
+    outward excursions give spicules, while the angular entropy of ring gradients
+    gives spiculation convergence. *(Rangayyan 1997; Karssemeijer & te Brake 1996.)*
 
-12. **Crown-Shyness boundary — `crown_shyness.py`.** Over a ±6 px band: gradient
-    sharpness (a soft conspicuity cue), halo-width std, transition-zone Shannon
-    entropy `−Σ pₖ·log₂ pₖ` (the most reliable discriminator), and visibility ratio;
-    composite weights `0.40 / 0.25 / 0.20 / 0.15`. *(Shannon 1948.)* ("Crown Shyness"
-    is the project's own coinage.)
+12. **Crown-Shyness boundary (`crown_shyness.py`).** Over a ±6 px band it measures
+    gradient sharpness as a soft conspicuity cue, halo-width standard deviation,
+    transition-zone Shannon entropy `−Σ pₖ·log₂ pₖ`, and visibility ratio, with
+    composite weights `0.40 / 0.25 / 0.20 / 0.15`. The entropy term is the most
+    reliable discriminator. *(Shannon 1948.)* ("Crown Shyness" is the project's own
+    coinage.)
 
-13. **Classification — `classify.py`.** Conservative rule thresholds map the geometry
-    and boundary features to BI-RADS shape and compound CBIS-DDSM margin labels; an
-    additive malignancy score (`≥0.50 ⇒ malignant`) gives the risk. Hand-set, not
-    fitted. *(ACR BI-RADS; Liberman et al. 1998.)*
+13. **Classification (`classify.py`).** Conservative rule thresholds map the geometry
+    and boundary features to BI-RADS shape labels and compound CBIS-DDSM margin labels.
+    An additive malignancy score (`≥0.50 ⇒ malignant`) gives the risk. The thresholds
+    are hand-set rather than fitted. *(ACR BI-RADS; Liberman et al. 1998.)*
 
-14. **Orchestration + quality gate — `pipeline.py`.** Runs the chain and gates trust:
-    `failed_no_mass` / `clinician_guided` / `needs_roi` — unguided localisation is
-    never trusted and withholds morphology. ROIs are rasterised to the 512² grid by
-    the affine scale `512/W, 512/H`.
+14. **Orchestration + quality gate (`pipeline.py`).** Runs the chain and gates trust
+    through three states: `failed_no_mass`, `clinician_guided`, and `needs_roi`.
+    Unguided localisation is never trusted and withholds morphology. ROIs are
+    rasterised to the 512² grid by the affine scale `512/W, 512/H`.
 
-15. **AI insights — `insights.py`.** One multimodal Gemini call (overlay
-    PNG + profile JSON) returns a fixed 9-field narrative; retries on 429/500/503/504;
-    inert without a key; explicitly non-diagnostic.
+15. **AI insights (`insights.py`).** One multimodal Gemini call (overlay PNG plus
+    profile JSON) returns a fixed 9-field narrative. It retries on 429/500/503/504, is
+    inert without a key, and is explicitly non-diagnostic.
 
 **Supporting modules.** `main.py` (app factory), `routes.py` (endpoints), `config.py`
-(insights settings), `storage.py` (uploads / demos / pruning), `ratelimit.py` (per-IP
+(insights settings), `storage.py` (uploads, demos, pruning), `ratelimit.py` (per-IP
 limiter), `paths.py` (path constants).
 
 ## References
 
 1. DICOM PS3.3 §C.11.1 (Modality LUT), §C.11.2 (VOI LUT).
 2. Otsu N. "A threshold selection method from gray-level histograms." *IEEE Trans. Syst. Man Cybern.* 9:62–66, 1979. doi:10.1109/TSMC.1979.4310076.
-3. ITU-R BT.601 — luma coefficients (0.299, 0.587, 0.114).
+3. ITU-R BT.601. Luma coefficients (0.299, 0.587, 0.114).
 4. Kulpa Z. "Area and perimeter measurement of blobs in discrete binary pictures." *Comput. Graph. Image Process.* 6:434–451, 1977.
 5. Andrew A.M. "Another efficient algorithm for convex hulls in two dimensions." *Inf. Process. Lett.* 9:216–219, 1979.
 6. Hu M.-K. "Visual pattern recognition by moment invariants." *IRE Trans. Inf. Theory* 8(2):179–187, 1962.
-7. Rangayyan R.M. et al. — centroid-to-contour radial-signature shape descriptor (generic in-code attribution).
+7. Rangayyan R.M. et al. Centroid-to-contour radial-signature shape descriptor (generic in-code attribution).
 8. Karssemeijer N., te Brake G.M. "Detection of stellate distortions in mammograms." *IEEE Trans. Med. Imaging* 15:611–619, 1996.
 9. Shannon C.E. "A mathematical theory of communication." *Bell Syst. Tech. J.* 27:379–423, 1948.
 10. ACR BI-RADS mammography lexicon (shape/margin vocabulary and risk direction).
@@ -238,10 +240,10 @@ limiter), `paths.py` (path constants).
 
 **Auxiliary**
 
-12. Canny J. "A computational approach to edge detection." *IEEE Trans. Pattern Anal. Mach. Intell.* 8(6):679–698, 1986 — the first-derivative-of-Gaussian gradient (the code's "Canny-style"; *not* Marr–Hildreth, which is Laplacian zero-crossings).
-13. Gonzalez R.C., Woods R.E. *Digital Image Processing* — Moore-neighbour boundary tracing.
-14. Soille P. *Morphological Image Analysis*, 2nd ed., Springer, 2003 — white top-hat / morphology.
-15. Duchon C.E. "Lanczos filtering in one and two dimensions." *J. Appl. Meteorol.* 18:1016–1022, 1979 — Lanczos resampling.
+12. Canny J. "A computational approach to edge detection." *IEEE Trans. Pattern Anal. Mach. Intell.* 8(6):679–698, 1986. The code's gradient is first-derivative-of-Gaussian ("Canny-style"); Marr–Hildreth instead detects Laplacian zero-crossings.
+13. Gonzalez R.C., Woods R.E. *Digital Image Processing*. Moore-neighbour boundary tracing.
+14. Soille P. *Morphological Image Analysis*, 2nd ed., Springer, 2003. White top-hat and morphology.
+15. Duchon C.E. "Lanczos filtering in one and two dimensions." *J. Appl. Meteorol.* 18:1016–1022, 1979. Lanczos resampling.
 16. Rangayyan R.M. et al. "Measures of acutance and shape for classification of breast tumors." *IEEE Trans. Med. Imaging* 16(6):799–810, 1997.
 17. ACR BI-RADS Atlas, 5th ed., American College of Radiology, 2013.
 18. FDA *AI/ML-Based SaMD Action Plan*, 2021.
