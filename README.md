@@ -22,7 +22,7 @@ The analysis then sent over to AI model(in this case gemini-2.5-flash) for expla
 - **AI Insights**: when a Google Gemini key is configured, the analysis
   screen can send the rendered AOI image plus the measured profile to Gemini in
   a single multimodal call and render a structured narrative report. **Off by
-  default**; with no key set, nothing leaves the machine.
+  default**; with no key set. The deployed web app has its own api key, refer to configuration for local machine setup.
 
 ## Project Layout
 
