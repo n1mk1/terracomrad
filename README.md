@@ -1,9 +1,6 @@
 # TerraComrad
 TerraComrad connects radiologist and physician judgment with AI-assisted mass analysis. The system scans each image at scale, segmenting masses, measuring shape and margin features, and scoring boundary characteristics. Here, algorithmic findings directed by clinicians act as a harness on agentic workflows. Doctors draw regions of interest based on their workflow: processing patient history, diagnostic context, and implicit expertise that no algorithm can fully replicate yet. This is a guardrail model: the physician prunes absurdity; AI narrows the search.
 
-This is a concept exploration for educational and informational purposes only and should not be considered medical advice. Always consult with a qualified healthcare professional for diagnosis and treatment.
-
-
 A DICOM mammogram viewer with doctor ROI annotation and a deterministic
 Area-of-Interest (AOI) analysis pipeline. Given a hyper-zoomed mass crop,
 the pipeline reproduces the radiologist's mass mask **without any ML** and
@@ -130,18 +127,8 @@ With no key set, `/api/insights/status` reports disabled and the panel shows a
 3. **Start Analysis**: the pipeline measures every AOI; the panel shows the
    largest AOI's shape, margin, geometry, and Crown-Shyness metrics alongside
    the doctor's annotations.
-4. *(optional)* **Generate AI insights**: sends the flattened composite plus
+4. **Generate AI insights**: sends the flattened composite plus
    the compact profile to Gemini and renders a structured narrative report.
-
-## Deployment
-
-The app is a long-running uvicorn server that needs a **writable local disk**
-(it stores opened DICOMs under `backend/uploads/` and analysis logs under
-`backend/aoi_logs/`). That suits a container/VM host (Render, Railway, Fly.io,
-Cloud Run, or a plain VPS), not a read-only serverless platform.
-
-A `Dockerfile` is included; every host below builds from it. For Render, a
-`render.yaml` Blueprint is also included for a one-click, pre-wired deploy.
 
 ### Build and run locally
 
@@ -150,35 +137,50 @@ docker build -t terracomrad .
 docker run --rm -p 8000:8000 terracomrad
 # add -e INSIGHTS_API_KEY=... to enable AI Insights
 ```
-
 Then open <http://127.0.0.1:8000>.
 
-### Deploy to a host
+---
+# REPORT
 
-| Host | Steps |
-| --- | --- |
-| **Render** | New → **Blueprint** → connect the repo → Apply (uses the bundled `render.yaml`, which wires the `/healthz` check and ephemeral 2h-TTL logs). Or New → Web Service → *Docker* runtime for a manual setup. Render injects `$PORT`. |
-| **Railway** | New Project → Deploy from repo. The Dockerfile is auto-detected; `$PORT` is injected. |
-| **Fly.io** | `fly launch` (detects the Dockerfile) → set the service `internal_port` to `8000`. |
+DICOM crop (zoomed, single mass)
+    │ pydicom decode · Modality LUT (PS3.3 C.11.1) · VOI LUT (PS3.3 C.11.2)
+    ▼
+float32 512×512 [0,1]                          (preprocess.py)
+    │
+    ├──► Otsu breast mask                       (maps.py)  ─┐
+    ├──► FDoG gradient magnitude (σ=1)          (maps.py)  ─┤ feed geometry / CSS only
+    │                                                       │
+    ▼                                                       │
+elevation likelihood (top-hat: σ=3 − σ=60)     (relevance.py)
+    │ × centre prior (ROI centroid or frame centre)
+    │ Otsu over search region + morphological cleanup
+    ▼
+binary mass mask
+    │
+    ▼
+8-connected components                         (lesions.py)
+    ├──► Moore contour tracing
+    ├──► Kulpa perimeter → circularity
+    ├──► Andrew hull → solidity
+    ├──► 2nd-moment tensor → eccentricity
+    ├──► radial signature → lobulation, spike index
+    └──► ring gradient angular entropy → spiculation convergence
+    │                                          ◄── gradient + breast_mask
+    ▼
+Crown Shyness (±6 px band)                     (crown_shyness.py)
+    ├──► gradient sharpness (95th-pct normalised)   [soft cue]
+    ├──► radial halo width std (64 rays)
+    ├──► transition-zone Shannon entropy            [most reliable]
+    └──► boundary visibility ratio                  [weak on its own]
+    │
+    ▼
+rule-based BI-RADS classification              (classify.py)
+    ├──► shape · margin (+ evidence) · pathology (+ confidence)
+    │
+    ▼
+quality gate → structured lesion profile       (pipeline.py)
+    │
+    └──► Gemini API (optional, non-diagnostic) (insights.py)
+             └──► 9-field narrative report
 
-Notes:
 
-- `backend/demos/` ships in the image so the bundled demo cases work.
-- `backend/uploads/` and `backend/aoi_logs/` are **ephemeral scratch**: fine
-  for demos, but they reset on every redeploy and are not backed by a disk. The
-  bundled `render.yaml` keeps them ephemeral on purpose and sets
-  `SCRATCH_TTL_HOURS=2`, so files are pruned ~2h after upload and a long-lived
-  instance can't fill its disk. To retain research logs across redeploys, mount
-  a disk at `backend/aoi_logs/` and set `SCRATCH_TTL_HOURS=0`. Each upload gets a
-  unique on-disk name (no cross-user collisions).
-- The AI-insights endpoint is rate-limited per IP (`INSIGHTS_RATE_LIMIT_PER_MIN`)
-  to protect a configured key's quota/billing. Behind a proxy the limiter reads
-  `X-Forwarded-For`; with multiple workers the limit is per-worker.
-- Interactive API docs (`/docs`) are **off by default**; set `ENABLE_DOCS=true`
-  to expose them (handy for local development).
-- The `render.yaml` Blueprint sets `autoDeploy: false` (a demo redeploys on
-  demand, not on every push), so trigger a manual deploy from the Render
-  dashboard after you push changes.
-- Set `INSIGHTS_API_KEY` (and any overrides) as environment variables in the
-  host's dashboard to enable the AI Insights layer; never bake the key into the
-  image (`.env` is excluded from the build context).
