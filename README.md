@@ -3,8 +3,8 @@
 A DICOM mammogram viewer with doctor ROI annotation and a deterministic
 Area-of-Interest (AOI) analysis pipeline. Given a hyper-zoomed mass crop,
 the pipeline reproduces the radiologist's mass mask **without any ML** and
-reports shape, margin, geometry, and Crown-Shyness(coined term for boundary optimization) metrics. The analysis then 
-sent over to AI model(in this case gemini-2.5-flash) for explanations and insights.
+reports shape, margin, geometry, and Crown-Shyness (coined term for boundary optimization) metrics. 
+The analysis then sent over to AI model(in this case gemini-2.5-flash) for explanations and insights.
 
 > Research / demo prototype. **Not a clinical diagnostic tool.**
 
