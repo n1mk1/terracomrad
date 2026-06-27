@@ -141,7 +141,7 @@ Then open <http://127.0.0.1:8000>.
 
 ---
 # REPORT
-
+```
 DICOM crop (zoomed, single mass)
     │ pydicom decode · Modality LUT (PS3.3 C.11.1) · VOI LUT (PS3.3 C.11.2)
     ▼
@@ -182,5 +182,4 @@ quality gate → structured lesion profile       (pipeline.py)
     │
     └──► Gemini API (optional, non-diagnostic) (insights.py)
              └──► 9-field narrative report
-
-
+```
