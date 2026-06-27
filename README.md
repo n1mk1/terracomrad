@@ -1,4 +1,20 @@
 # TerraComrad
+TerraComrad connects radiologist and physician judgment with
+                            AI-assisted mass analysis. The system scans each image at scale,
+                            segmenting masses, measuring shape and margin features, and scoring
+                            boundary characteristics.
+                            
+                            Here, algorithmic findings directed by clinicians act as a harness on
+                            agentic workflows. Doctors draw regions of interest based on
+                            their workflow: processing patient history, diagnostic context, and
+                            implicit expertise that no algorithm can fully replicate yet. This is a
+                            guardrail model: <strong>the physician prunes absurdity; AI narrows
+                            the search.</strong>
+                       
+                            This is a concept exploration for educational and informational
+                            purposes only and should not be considered medical advice. Always
+                            consult with a qualified healthcare professional for diagnosis and
+                            treatment.
 
 A DICOM mammogram viewer with doctor ROI annotation and a deterministic
 Area-of-Interest (AOI) analysis pipeline. Given a hyper-zoomed mass crop,
