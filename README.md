@@ -15,7 +15,7 @@ Insights layer can narrate the result via Google Gemini Flash.
 - **Deterministic analysis pipeline**: no ML, no randomness. Segments the dominant
   mass, then measures geometry, margin, and Crown-Shyness; produces a rule-based
   shape / margin / pathology label set.
-- **Optional AI Insights**: when a Google Gemini key is configured, the analysis
+- **AI Insights**: when a Google Gemini key is configured, the analysis
   screen can send the rendered AOI image plus the measured profile to Gemini in
   a single multimodal call and render a structured narrative report. **Off by
   default**; with no key set, nothing leaves the machine.
