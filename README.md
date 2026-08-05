@@ -1,4 +1,5 @@
 <img width="1038" height="593" alt="Screenshot 2026-07-01 191225" src="https://github.com/user-attachments/assets/2d06f5c1-b12b-4111-b8d4-18a2b98dc539" />
+
 # TerraComrad
 TerraComrad connects radiologist and physician judgment with AI-assisted mass analysis. The system scans each image at scale, segmenting masses, measuring shape and margin features, and scoring boundary characteristics. Here, algorithmic findings directed by clinicians act as a harness on agentic workflows. Doctors draw regions of interest based on their workflow: processing patient history, diagnostic context, and implicit expertise that no algorithm can fully replicate yet. This is a guardrail model: the physician prunes absurdity; AI narrows the search.
 
